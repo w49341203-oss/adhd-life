@@ -105,7 +105,7 @@ button{font-family:inherit;cursor:pointer}
 .ctitle{font-size:13px;font-weight:800;margin-bottom:4px}
 .bcol.ghost .ctitle{color:var(--cyan)}
 .cloud{position:relative;height:128px;border-radius:10px;background:repeating-linear-gradient(45deg,#2a3530,#2a3530 6px,#283330 6px,#283330 12px);overflow:hidden;margin-bottom:6px}
-@media (max-aspect-ratio:1/1){.cloud{height:96px}}
+@media (max-aspect-ratio:1/1){.cloud{height:96px}#bcols{flex-direction:column}}
 .cloud .cl{position:absolute;left:6px;top:3px;font-size:11px;color:#7f9088}
 .cloud .hyper{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:14px;color:#f0d080;text-align:center;padding:8px}
 .bub{position:absolute;max-width:72%;background:#fff;color:#2a2a3a;border-radius:16px;padding:6px 10px 8px;font-size:13px;font-weight:700;cursor:pointer;
@@ -113,6 +113,8 @@ button{font-family:inherit;cursor:pointer}
 .bub.body{background:#ffe4c4}.bub.self{background:#e8d8ff}.bub.lure{background:#fff3a8}.bub.phone{background:#cfe9ff}.bub.game{background:#ffd0e0}.bub.shop{background:#ffe0b0}
 .bub i{position:absolute;left:8px;right:8px;bottom:3px;height:3px;background:#e06050;border-radius:2px;transform-origin:left}
 .bub.pop{animation:popOut .25s forwards}
+.bub.shake{animation:shake .35s}
+@keyframes shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 @keyframes bubIn{from{transform:scale(.3);opacity:0}}
 @keyframes popOut{to{transform:scale(1.5);opacity:0}}
 .gcount{font-size:12px;color:var(--sub);padding:28px 6px 6px}
@@ -196,6 +198,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
     <div id="qte"><div class="q" id="qteQ"></div>
       <div style="font-size:12px;text-align:left" id="qteL1">煞車力</div><div class="bar"><i id="qteP"></i></div>
       <div style="font-size:12px;text-align:left" id="qteL2">衝動倒數</div><div class="bar tbar"><i id="qteT"></i></div>
+      <div class="hint" id="qteInfo" style="font-size:15px;color:#ffe2a0;margin:2px 0 8px"></div>
       <button id="qteBtn" data-hold="hold">🤐 忍住！（按住不放）</button>
       <div class="hint" id="qteHint"></div></div>
     <div id="seatbar"></div>
@@ -233,7 +236,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3.7';
+const VERSION='v0.4.0';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -274,6 +277,7 @@ function normalizeSave(d){
   d.flags=(d.flags&&typeof d.flags==='object')?d.flags:{};
   d.history=(d.history&&typeof d.history==='object')?d.history:{};
   d.chapter=['elem','mid','uni','work','family','done'].includes(d.chapter)?d.chapter:'elem';
+  d.outward=Number.isFinite(+d.outward)?clamp(+d.outward,.1,.9):(d.gender==='M'?.65:.35);
   d.seg=Number.isInteger(d.seg)&&d.seg>=0?d.seg:0;
   d.run=(d.run&&typeof d.run==='object')?d.run:null;
   return d;
@@ -453,13 +457,14 @@ const POOL={
 class Brain{
   constructor(p,typical,ctx={}){
     this.typical=typical;this.g=p.gender;this.iq=p.iq;this.mods=typical?{}:(ctx.mods||{});
+    this.out=Number.isFinite(+p.outward)?+p.outward:(p.gender==='M'?.65:.35);this.energy=100;
     this.comp=clamp((p.iq-100)/40,-.5,1)*(ctx.compScale==null?1:ctx.compScale);
     this.stageRest=ctx.stage==='adult'?.7:ctx.stage==='teen'?.85:1;
     this.memCap=typical?4:(p.iq>=125?3:2)+(this.mods.capPlus||0);
     this.focus=typical?85:70;this.dopa=typical?70:55;this.rest=0;this.mood=70;this.anx=typical?5:15;
     this.notes=[];this.thoughts=[];this.hyper=false;this.daydream=0;this.tCount=0;this.nid=1;this.on=()=>{};
   }
-  get masking(){return !this.typical&&this.g==='F'}
+  get masking(){return !this.typical&&this.out<.5}
   emit(t,d){try{this.on(t,d)}catch(e){console.error(e)}}
   addNotes(list){
     if(this.onAdd)this.onAdd(list);
@@ -478,7 +483,7 @@ class Brain{
   refresh(id){const n=this.notes.find(n=>n.id===id);if(!n||n.done||n.cd>0)return false;n.life=Math.min(1,n.life+.45);n.cd=6;this.focus=Math.max(0,this.focus-3);return true}
   rate(c){
     if(this.hyper||this.daydream>0)return 0;
-    let r=this.typical?.035:(this.g==='F'?.24:.2);
+    let r=this.typical?.035:(.17+(1-this.out)*.1);
     r*=(c.dist==null?1:c.dist)*(this.mods.thoughtMul||1);if(this.dopa<30)r*=1.7;if(c.interesting)r*=.3;if(c.noThoughts)r=0;
     return r;
   }
@@ -498,17 +503,18 @@ class Brain{
       const st=this.hyper?100:clamp(30+this.shDopa*.5+this.comp*8-(this.rest>70?10:0),15,92);
       this.shFocus=clamp(this.shFocus+(st-this.shFocus)*Math.min(1,dt*.8),0,100);
     }
-    let target=this.typical?85:clamp(30+this.dopa*.5+this.comp*8+(this.mods.focusPlus||0)-(this.rest>70?10:0),15,92);
+    let target=this.typical?85:clamp(30+this.dopa*.5+this.comp*8+(this.mods.focusPlus||0)-(this.rest>70?10:0)-(this.energy<25?8:0),15,92);
     if(this.hyper)target=100;
     this.focus=clamp(this.focus+(target-this.focus)*Math.min(1,dt*.8),0,100);
-    if(c.seated)this.rest+=(this.typical?.4:(this.g==='M'?3:2))*(c.restMul||1)*this.stageRest*(this.mods.restMul||1)*dt;
+    if(c.seated)this.rest+=(this.typical?.4:(1.5+this.out*2.2))*(c.restMul||1)*this.stageRest*(this.mods.restMul||1)*dt;
     if(c.walking)this.rest-=12*dt;
     if(c.fidget)this.rest-=(A?9:6)*dt;
     if(!c.seated&&!c.walking)this.rest-=2*dt;
     if(this.hyper)this.rest-=3*dt;
     this.rest=clamp(this.rest,0,100);
     if(this.rest>=100&&c.seated){this.rest=60;this.emit('rest-overflow')}
-    if(this.masking&&c.seated&&this.rest>55)this.anx=clamp(this.anx+.6*dt,0,100);else this.anx=clamp(this.anx-.15*dt,0,100);
+    if(this.masking&&c.seated&&this.rest>55){this.anx=clamp(this.anx+.6*dt,0,100);if(A)this.energy=clamp(this.energy-.5*dt,0,100)}else this.anx=clamp(this.anx-.15*dt,0,100);
+    if(A){let er=c.seated?(c.working?.15:.5):(c.walking?.8:1.2);if(this.hyper)er+=.6;this.energy=clamp(this.energy+er*dt,0,100)}
     for(const n of this.notes){
       if(n.cd>0)n.cd-=dt;
       if(n.done){n.doneT-=dt;continue}
@@ -533,7 +539,9 @@ class Brain{
     this.tCount++;
     this.thoughts.push({id:this.nid++,text:tpl.text,kind:tpl.kind||'general',lure:tpl.lure||null,age:0,max:(tpl.lure?4.2:5)+this.comp*1.2,gone:false,keep:.3,x:rand(4,52),y:rand(18,58)});
   }
-  dismiss(id){const t=this.thoughts.find(t=>t.id===id&&!t.gone);if(!t)return false;t.gone=true;t.popped=true;this.focus=Math.max(0,this.focus-2);return true}
+  dismiss(id){const t=this.thoughts.find(t=>t.id===id&&!t.gone);if(!t)return false;
+    if(!this.typical){const cost=5;if(this.energy<cost)return 'tired';this.energy-=cost}
+    t.gone=true;t.popped=true;this.focus=Math.max(0,this.focus-2);return true}
 }
 
 /* ================= 遊戲狀態 ================= */
@@ -567,14 +575,16 @@ function after(sec,fn){G.timers.push({t:sec,fn})}
 /* ---------- 被罵、統計 ---------- */
 async function scold(who,text){
   S().scold++;G.brain.mood=clamp(G.brain.mood-(sup('talk')?5:10),0,100);Sound.bad();
+  G.segScold=(G.segScold||0)+1;
+  if(G.segScold>2){toast('😣 '+who+'：'+text.replace(/\{name\}/g,NAME()).slice(0,22)+(text.length>22?'…':''));return}
   await say(who,text);
-  if(G.save.gender==='F')inner(pick(['又來了…我真的很糟','大家都在看我…好想消失','我明明很努力了']));
+  if(G.save.outward<.5)inner(pick(['又來了…我真的很糟','大家都在看我…好想消失','我明明很努力了']));
   else inner(pick(['又不是故意的…','為什麼又是我？','我也不想這樣啊']));
 }
 
 /* ================= 大腦事件：念頭被拉走等 ================= */
 function thoughtSource(brain){
-  const seg=G.seg;const r=Math.random();const M=G.save.gender==='M';
+  const seg=G.seg;const r=Math.random();const O=G.save.outward;
   if(G.seg.kind==='roam'&&G.player){
     const near=G.ents.filter(e=>e.lure&&!e.gone&&dist(G.player.x,G.player.y,e.px,e.py)<T*5.5);
     if(near.length&&r<.6){const e=pick(near);return{text:e.lure,kind:'lure',lure:e.id}}
@@ -582,8 +592,8 @@ function thoughtSource(brain){
   const P=(G.chapter&&G.chapter.pools)||POOL;
   if(seg.phone&&!sup('quiet')&&Math.random()<.3)return{text:pick(seg.phonePool||PHONE_POOL),kind:'phone'};
   if(seg.special&&Math.random()<seg.special.p)return{text:pick(seg.special.texts),kind:seg.special.kind};
-  if(r<(M?.28:.14))return{text:pick(P.body),kind:'body'};
-  if(r<(M?.36:.38))return{text:pick(P.self),kind:'self'};
+  if(r<.06+O*.34)return{text:pick(P.body),kind:'body'};
+  if(r<.36)return{text:pick(P.self),kind:'self'};
   if(seg.pool&&Math.random()<.55)return{text:pick(seg.pool),kind:'general'};
   return{text:pick(P.general),kind:'general'};
 }
@@ -612,8 +622,9 @@ function onBrain(type,d){
   if(type==='overflow-notes'){d.forEach(n=>{S().lost++;fallNote(n.text)});inner('等等…還有一個是什麼？')}
   if(type==='rest-overflow'){
     S().overflow++;
-    if(G.save.gender==='F'){S().masked++;b.anx=clamp(b.anx+15,0,100);b.mood=clamp(b.mood-4,0,100);toast('你用盡力氣忍住了。沒有人發現……但好累。');inner('不能動…不能被發現…')}
+    if(Math.random()>G.save.outward){S().masked++;b.anx=clamp(b.anx+15,0,100);b.mood=clamp(b.mood-4,0,100);b.energy=clamp(b.energy-15,0,100);toast('你用盡力氣忍住了。沒有人發現……但好累。');inner('不能動…不能被發現…')}
     else if(G.seg.onOverflow){b.rest=30;G.seg.onOverflow()}
+    else{b.rest=40;toast('你忍不住大動作伸了個懶腰，旁邊的人看了你一眼。')}
   }
   if(type==='hyper'){$('#hyperTag').style.display=d?'block':'none';if(d)inner('哇……好好玩……')}
 }
@@ -871,6 +882,8 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
    await say('老師','明天美勞課要帶美勞用具！通知單發下去了，回家給家長簽名；數學作業本記得帶回家寫。');
    const L=[{key:'art',text:'明天要帶美勞用具（跟媽媽說）'},{key:'notice',text:'帶通知單回家'},{key:'hw2',text:'數學作業本帶回家'}];
    G.gb.addNotes(L);G.brain.addNotes(L);
+   await say('老師','怕大家忘記，老師都寫在黑板上了，抄進聯絡簿再走！');
+   addWritten(L);G.run.flags.boardList=true;toast('📒 老師換了一種交代方式：寫下來了！忘了就點右邊的清單');
  },
  async onTalk(e){
    if(e.id==='friends'){
@@ -896,7 +909,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
    else await say('你（內心）','（你完全忘了美勞用具這件事。明天美勞課……）');
    if(s.copy>=100&&G.run.bag.notice&&G.run.bag.hw2&&s.art)await say('媽媽','哇，今天全部都有帶回來耶！好棒！');
    // 老師評語與評估
-   const notice=s.scold*1.5+s.blurts*2+(G.save.gender==='M'?2:0)+s.overflow*(G.save.gender==='M'?1:0)-b.comp*3;
+   const notice=s.scold*1.5+s.blurts*2+G.save.outward*3+Math.max(0,s.overflow-s.masked)-b.comp*3;
    G.run.flags.noticeScore=Math.round(notice*10)/10;
    if(notice>=6){
      await say('聯絡簿・老師留言','{name}上課常常坐不住、東西常常忘記帶，也常衝口而出。建議家長可以帶去兒童心智科做評估，了解孩子的需要。');
@@ -907,7 +920,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
        G.run.flags.diagnosed=true;
      }else{G.run.flags.diagnosed=false;await say('旁白','媽媽決定再觀察看看。你繼續努力「跟上大家」。')}
    }else{
-     if(G.save.gender==='F')await say('聯絡簿・老師留言','{name}很乖、很安靜，只是上課常常在發呆，請家長多注意。');
+     if(G.save.outward<.5)await say('聯絡簿・老師留言','{name}很乖、很安靜，只是上課常常在發呆，請家長多注意。');
      else await say('聯絡簿・老師留言','{name}很聰明，只是有點粗心，再細心一點會更好！');
      await say('旁白','沒有人覺得需要去看醫生。\n沒有人知道，你每天要花多大的力氣，才能看起來「跟大家一樣」。');
      G.run.flags.diagnosed=false;G.run.flags.missed=true;
@@ -937,13 +950,15 @@ function addLabPt(){
 const impRate=()=>clamp(1-G.brain.rest/150,.2,1);
 const emoRate=()=>clamp(.3+G.brain.mood/110,.25,1.1);
 function qte(o){return new Promise(res=>{
-  G.qte={t:0,win:o.win||3.2,need:o.need,prog:0,res,rate:o.rate||impRate};input.hold=false;
+  const rate=o.rate||impRate;
+  const info=o.info||(rate===impRate?()=>'你現在「坐不住」'+Math.round(G.brain.rest):rate===emoRate?()=>'你現在「心情」'+Math.round(G.brain.mood):null);
+  G.qte={t:0,win:o.win||3.2,need:o.need,prog:0,res,rate,info,l1:o.l1||'煞車力'};input.hold=false;
   $('#qteQ').textContent=o.q.replace(/\{name\}/g,NAME());$('#qteHint').textContent=o.hint||'';$('#qteBtn').textContent=o.btn||'🤐 忍住！（按住不放）';
   $('#qteL1').textContent=o.l1||'煞車力';$('#qteL2').textContent=o.l2||'衝動倒數';$('#qte').style.display='block';
 })}
 function finishQTE(ok){const q=G.qte;$('#qte').style.display='none';input.hold=false;G.qte=null;if(q&&q.res)q.res(ok)}
 async function mathQTE(){
-  const ok=await qte({q:'老師：「7×8 等於多少？想好的人先舉手——」\n你腦中已經衝出答案了！',need:G.save.gender==='M'?2.2:1.8,hint:'提示：「坐不住」越高，煞車越難踩。'});
+  const ok=await qte({q:'老師：「7×8 等於多少？想好的人先舉手——」\n你腦中已經衝出答案了！',need:1.6+G.save.outward*.9,hint:'提示：「坐不住」越高，煞車越難踩。'});
   if(ok){S().qteOk=true;G.brain.mood=clamp(G.brain.mood+5,0,100);Sound.good();await say('老師','{name}有舉手，很好。答案是？\n——「56！」答對了！')}
   else{S().blurts++;await say('你','「五十六——！！」（還沒舉手就喊出來了）');await scold('老師','{name}，要先舉手！不要用喊的！')}
 }
@@ -1018,7 +1033,7 @@ const SUPPORTS=[
   {id:'list',icon:'📋',name:'寫下來（檢查清單）',desc:'別人交代的事都會寫在大腦畫面的「清單」上。忘了，點一下看一眼就想起來。'},
   {id:'timer',icon:'⏰',name:'計時器＋鬧鐘',desc:'時鐘永遠看得清楚，時間快到時會響。',},
   {id:'quiet',icon:'🎧',name:'安靜環境（手機放遠）',desc:'念頭泡泡少 40%，手機不會一直把你吸走。',mods:{thoughtMul:.6}},
-  {id:'move',icon:'🏃',name:'規律運動＋允許動一動',desc:'坐不住累積得慢 40%。',mods:{restMul:.6}},
+  {id:'move',icon:'🏃',name:'規律運動＋允許動一動',desc:'坐不住累積得慢 40%，動一動還能補一點動力。',mods:{restMul:.6,drainMul:.8}},
   {id:'med',icon:'💊',name:'藥物（醫師評估後）',desc:'動力不容易掉、專注的底子比較高、「開始的牆」變輕。不是每個人都適合，可能有副作用（例如食慾變差），一定要跟醫師討論。',mods:{drainMul:.5,focusPlus:12,restMul:.8}},
   {id:'talk',icon:'🗣️',name:'讓身邊的人了解',desc:'老師、主管或伴侶知道你的狀況：被罵時心情受傷減半。',},
 ];
@@ -1026,13 +1041,17 @@ function sup(id){return !!(G.run&&G.run.supports&&G.run.supports.includes(id))}
 function brainCtx(){const mods={};(G.run.supports||[]).forEach(id=>{const s=SUPPORTS.find(x=>x.id===id);if(s&&s.mods)for(const k in s.mods){if(k==='capPlus'||k==='focusPlus')mods[k]=(mods[k]||0)+s.mods[k];else mods[k]=(mods[k]||1)*s.mods[k]}});
   return{compScale:G.chapter.compScale,mods,stage:G.chapter.stage}}
 function chapterIndex(id){if(id==='done')return CHAPTERS.length;return CHAPTERS.findIndex(c=>c.id===id)}
-function canUseSupports(id){const d=G.save.flags.diagnosed;return !!d&&chapterIndex(d)>=0&&chapterIndex(d)<chapterIndex(id)}
+function diagnosedBefore(id){const d=G.save.flags.diagnosed;return !!d&&chapterIndex(d)>=0&&chapterIndex(d)<chapterIndex(id)}
+function canUseSupports(id){return chapterIndex(id)>=1}
+const LIFE_SUP=['list','timer','quiet','move'];
 function supportScreen(go){
-  let picked=[];
-  const render=()=>{screen(`<div class="scr"><h2>🩺 選擇這一章的輔助策略</h2><p>你已經確診了。知道自己的大腦怎麼運作，就能「對症下藥」。這一章最多選 3 個：</p>
-   ${SUPPORTS.map(s=>{const on=picked.includes(s.id);return `<div class="slot" data-s="${s.id}" style="${on?'border-color:var(--accent);background:#3a3420':''}"><div><b>${s.icon} ${s.name}</b><br><small>${s.desc}</small></div><span style="font-size:22px">${on?'✅':'＋'}</span></div>`}).join('')}
+  let picked=[];const dx=diagnosedBefore(G.chapter.id),max=dx?3:2,list=SUPPORTS.filter(x=>dx||LIFE_SUP.includes(x.id));
+  const intro=dx?'你已經確診了。知道自己的大腦怎麼運作，就能「對症下藥」。這一章最多選 3 個：'
+    :'你還沒確診，但你從生活裡摸索出一些方法（也可能是哪個大人教你的）。不用等診斷，這些都可以先用。這一章最多選 2 個；「藥物」和「讓身邊的人了解」要確診後才有。';
+  const render=()=>{screen(`<div class="scr"><h2>${dx?'🩺':'🧰'} 選擇這一章的輔助策略</h2><p>${intro}</p>
+   ${list.map(s=>{const on=picked.includes(s.id);return `<div class="slot" data-s="${s.id}" style="${on?'border-color:var(--accent);background:#3a3420':''}"><div><b>${s.icon} ${s.name}</b><br><small>${s.desc}</small></div><span style="font-size:22px">${on?'✅':'＋'}</span></div>`}).join('')}
    <button class="mbtn pri" id="sGo">${picked.length?'就用這些，開始':'都不用，開始'}</button></div>`);
-   document.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>{const id=el.dataset.s;if(picked.includes(id))picked=picked.filter(x=>x!==id);else if(picked.length<3)picked.push(id);else{toastScr('最多選 3 個');return}render()});
+   document.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>{const id=el.dataset.s;if(picked.includes(id))picked=picked.filter(x=>x!==id);else if(picked.length<max)picked.push(id);else{toastScr('最多選 '+max+' 個');return}render()});
    $('#sGo').onclick=()=>{G.run.supports=picked.slice();go()}};
   render();
 }
@@ -1075,7 +1094,7 @@ function wallBar(lbl,extra=''){
 function botGo(id){const e=G.ents.find(e=>e.id===id&&!e.gone);if(!e)return false;G.player.auto=null;
   if(e.trigger){G.player.x=tc(e.tx);G.player.y=tf(e.ty)}else{G.player.x=e.px;G.player.y=e.onDesk?e.py+18:e.py+4}interact();return true}
 async function diagnosisEvent(fn){
-  if(canUseSupports(G.chapter.id)){G.run.flags.already=true;if(G.chapter.reflect)await G.chapter.reflect();return}
+  if(diagnosedBefore(G.chapter.id)){G.run.flags.already=true;if(G.chapter.reflect)await G.chapter.reflect();return}
   const yes=await fn();
   if(yes){
     await say('旁白','醫師做了問卷、會談，也請家人提供從小到大的觀察（實際上通常要好幾次）。\n診斷：ADHD（注意力不足過動症）混合型。');
@@ -1085,25 +1104,53 @@ async function diagnosisEvent(fn){
 }
 const yes=v=>v?'✅':'❌';
 function commonRows(s,b,g){const r=[['被念頭拉走',s.hijacks+' 次','0 次'],['忘掉的便利貼',s.lost+' 張','0 張'],['被罵／被唸',s.scold+' 次','0 次'],['一天結束的心情',Math.round(b.mood)+' / 100','約 75 / 100']];
-  if(G.save.gender==='F')r.push(['硬忍住沒被發現',s.masked+' 次','—'],['累積的焦慮',Math.round(b.anx)+' / 100','約 5 / 100']);return r}
+  if(s.masked>0||b.anx>=25)r.push(['硬忍住沒被發現',s.masked+' 次','—'],['累積的焦慮',Math.round(b.anx)+' / 100','約 5 / 100']);
+  r.push(['一天結束的精神力',(s.energyEnd!=null?s.energyEnd:Math.round(b.energy))+' / 100','約 80 / 100']);return r}
 function baseStats(){return{scold:0,hijacks:0,lost:0,masked:0,peeks:0,overflow:0,phoneMin:0}}
 
 /* ================= 第二章 中學 ================= */
-const EXAM_F=[['apple 的意思是？',['蘋果','香蕉','鳳梨'],0],['I ___ a student.',['am','is','are'],0],['「圖書館」的英文是？',['library','kitchen','hospital'],0],['They ___ playing.',['is','are','am'],1],['yesterday 的意思是？',['明天','昨天','今天'],1],['She ___ to school every day.',['go','goes','going'],1]];
-const EXAM_B=[['「星期五」的英文是？',['Monday','Friday','Sunday'],1],['How ___ you?',['is','am','are'],2],['cat 的複數是？',['cats','cates','caties'],0]];
+const EXAM_F=[
+  {q:'apple 的意思是？',o:['蘋果','香蕉','鳳梨'],a:0,k:1},
+  {t:['下列哪一個字','「不是」','動物？'],key:1,o:['cat','dog','desk'],a:2},
+  {q:'They ___ playing.',o:['is','are','am'],a:1,k:1},
+  {lines:['Tom has a cat.','The cat is black.',"Tom's sister has a dog."],info:1,q:"What color is Tom's cat?",o:['black','white','brown'],a:0},
+  {q:'yesterday 的意思是？',o:['明天','昨天','今天'],a:1,k:1},
+  {t:['下列哪一個句子','「沒有」','寫錯？'],key:1,o:['He go to school.','She goes to school.','They goes to school.'],a:1},
+];
+const EXAM_B=[
+  {q:'「星期五」的英文是？',o:['Monday','Friday','Sunday'],a:1,k:1},
+  {lines:['Amy gets up at six.','She eats breakfast at seven.','She goes to school at eight.'],info:1,q:'When does Amy eat breakfast?',o:['six','seven','eight'],a:1},
+  {q:'How ___ you?',o:['is','am','are'],a:2,k:1},
+];
+function examSkipP(){const b=G.brain;return b.typical?0:clamp(.04+(60-b.focus)/250,.02,.25)}
+function buildQ(q,careful){
+  const U=[];const words=t=>/\s/.test(t)?t.split(' ').map(w=>w+' '):[t];
+  if(q.lines)q.lines.forEach((ln,li)=>words(ln).forEach(w=>U.push({text:w,line:li})));
+  const ql=q.lines?q.lines.length:0;
+  if(q.t)q.t.forEach((w,wi)=>U.push({text:w,line:ql,key:wi===q.key}));else words(q.q).forEach(w=>U.push({text:w,line:ql}));
+  const sk=examSkipP()*(careful?.5:1);
+  if(q.lines)for(let li=1;li<q.lines.length;li++)if(Math.random()<sk*1.3)U.filter(u=>u.line===li).forEach(u=>u.skip=true);
+  return{U,cursor:0,t:0,next:.25,lines:ql+1};
+}
+function renderExq(){const el=$('#exq');if(!el||!G.ex||!G.ex.cur)return;const C=G.ex.cur,b=G.brain,now=G.segT;
+  const hold=b.typical?999:1.2+b.focus/25;let html='';
+  for(let li=0;li<C.lines;li++){let row='';for(const u of C.U){if(u.line!==li||u.skip||u.at==null)continue;const age=now-u.at;const op=age<hold?1:Math.max(.22,1-(age-hold)/2.5);row+='<span style="opacity:'+op.toFixed(2)+'">'+esc(u.text)+'</span>'}
+    if(row)html+='<div>'+row+'</div>'}
+  el.innerHTML=html||'<span style="opacity:.4">（讀題中……）</span>'}
 const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compScale:.8,pools:POOL_TEEN,
  init:()=>({stats:{items:0,late:false,exam:0,careless:0,flipped:false,held:null,conflict:false,gave:false,toilet:false,backLate:false,relay:0,falseStart:0,hw:0},gs:{items:4,exam:100,relay:106,hw:100}}),
  reflect:async()=>{await say('旁白','你每週去一次諮商，也跟導師說明了你的狀況。\n困難還在，但你不再覺得自己是「壞孩子」。')},
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時搭上公車',yes(!s.late),yes(true)],
-   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
+   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['沒學會只能猜（跟 IQ 有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
    ['被嘲笑時忍住了',s.held===null?'—':yes(s.held),yes(true)],['下課準時回座',yes(!s.backLate),yes(true)],
    ['⭐ 大隊接力跑出',s.relay+' 公尺',g.relay+' 公尺',true],['搶跑',s.falseStart+' 次','0 次'],
    ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
   cards:[
    s.relay>g.relay?`⭐ <b>你跑贏了一般的你：</b>${s.relay} 公尺 vs ${g.relay} 公尺。很多 ADHD 的人精力旺盛、在運動和需要爆發力的場合特別亮眼。`:'',
-   '📱 <b>手機為什麼特別難放下？</b>每一次震動都是一點新鮮感（多巴胺）。對多巴胺本來就不夠的大腦，手機就像磁鐵。「把手機放到別的房間」比「靠意志力不看」有效得多。',
-   '💢 <b>情緒煞車</b><br>ADHD 大腦管「踩煞車」的系統也管情緒。被嘲笑、被批評時，情緒來得又快又大，很難只靠忍。這不是脾氣差，是煞車比較慢。']}},
+   '📖 <b>讀題時字會淡掉、會跳字跳行</b><br><b>遊戲裡：</b>讀到後面，前面就淡掉；有時眼睛直接跳過一個字（像「不是」）或一整行。<br><b>現實中：</b>很多 ADHD 的人說題目要讀好幾次、常漏看關鍵字或跳行，這和注意力飄走、工作記憶有關。至於把字看反、讀錯字，比較像「讀寫障礙」的特徵；兩者常常一起出現，但不是每個 ADHD 都會。',
+   '📱 <b>手機為什麼特別難放下？</b><br><b>遊戲裡：</b>手機念頭一贏，時鐘就跳 15 分鐘。<br><b>現實中：</b>很多 ADHD 的人說，新鮮、立刻有回饋的東西特別難抗拒。「把手機放到別的房間」通常比「靠意志力不看」有效。',
+   '💢 <b>情緒煞車</b><br><b>遊戲裡：</b>心情越差，越難按住「深呼吸」。<br><b>現實中：</b>不少 ADHD 的人說情緒來得又快又大，被嘲笑或批評時很難只靠忍。這不是脾氣差，也不是每個人都這樣。']}},
  segs:[
  {id:'mhome',map:'home',kind:'roam',t0:'06:50',t1:'07:20',real:100,dist:1,phone:true,phoneJump:5,title:'起床，準備上學',
   card:'國二了。公車七點二十分到站，錯過就要等二十分鐘。',pool:['今天穿哪件外套？','頭髮翹起來了…','早餐要吃什麼？'],
@@ -1127,26 +1174,43 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  },
  {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
   card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
-  setup(){schoolBase();sitPlayer();G.ex={side:'front',i:0,front:[],back:[],submitted:false}},
+  setup(){schoolBase();sitPlayer();const unk=clamp((105-G.save.iq)/70,0,.45);
+   const mark=list=>list.map(q=>q.k&&Math.random()<unk);
+   G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F),back:mark(EXAM_B)},cur:null};this.newQ()},
+  newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful):null},
   bar(){const E=G.ex;
    if(E.submitted)return `<div class="lbl">交卷了。等鐘響……</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`;
    const list=E.side==='front'?EXAM_F:EXAM_B;
    if(E.i>=list.length){
      if(E.side==='front')return `<div class="lbl">正面寫完了！</div><div class="row"><button class="big" data-act="submit">📄 交卷</button><button data-act="flip" style="min-width:52px;font-size:13px;opacity:.7">↻</button><button data-hold="fidget">🌀 轉筆</button></div>`;
      return `<div class="lbl">背面也寫完了！</div><div class="row"><button class="big" data-act="submit">📄 交卷</button><button data-hold="fidget">🌀 轉筆</button></div>`}
-   const q=list[E.i];return `<div class="lbl">${E.side==='front'?'正面':'背面'}・第 ${E.i+1} 題：${esc(q[0])}</div><div class="row">${q[1].map((o,k)=>`<button data-act="ans" data-v="${k}">${esc(o)}</button>`).join('')}<button data-hold="fidget">🌀 轉筆</button></div>`},
+   const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
+   return `<div class="lbl">${E.side==='front'?'正面':'背面'}・第 ${E.i+1} 題${unk?'　<span style="color:#ffd66b">（這題好像沒學會……只能用猜的）</span>':''}</div>
+    <div id="exq" style="background:#fffaf0;color:#2b2d42;border-radius:12px;padding:8px 12px;margin:0 auto 8px;max-width:520px;font-size:17px;font-weight:700;line-height:1.5;min-height:34px;text-align:left"></div>
+    <div class="row">${q.o.map((o,k)=>`<button data-act="ans" data-v="${k}" style="${unk?'filter:blur(4px)':''}">${esc(o)}</button>`).join('')}<button data-act="reread" style="font-size:14px">🔁 再讀一次</button><button data-hold="fidget">🌀</button></div>`},
   async begin(){if(S().late){toast('（遲到了，比別人少寫五分鐘）');G.clock+=5}
    await say('監考老師','英文段考開始。考卷有正反兩面，寫完要檢查。');
    const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(L)},
   act(a,v){const E=G.ex,b=G.brain;if(b.daydream>0){toast('（腦袋飄走了，看不清題目）');return}
-   if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;let ok=+v===list[E.i][2];if(ok&&b.focus<45&&Math.random()<.35){ok=false;S().careless++}(E.side==='front'?E.front:E.back).push(ok);E.i++}
-   if(a==='flip'){E.side='back';E.i=0;S().flipped=true;b.completeNote('flip');toast('↻ 背面還有三題！')}
+   if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;G.clock+=1;this.newQ(true);toast('🔁 從頭再讀一次');return}
+   if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;const q=list[E.i],C=E.cur;
+     let ok=+v===q.a;
+     if(ok&&b.focus<45&&Math.random()<.25){ok=false;S().careless++}
+     if(!ok&&C){const keySkip=C.U.some(u=>u.key&&u.skip),infoSkip=q.info!=null&&C.U.some(u=>u.line===q.info&&u.skip);if(keySkip||infoSkip)S().skipErr=(S().skipErr||0)+1}
+     if((E.side==='front'?E.unk.front:E.unk.back)[E.i])S().unknown=(S().unknown||0)+1;
+     (E.side==='front'?E.front:E.back).push(ok);E.i++;this.newQ()}
+   if(a==='flip'){E.side='back';E.i=0;S().flipped=true;b.completeNote('flip');toast('↻ 背面還有三題！');this.newQ()}
    if(a==='submit'){E.submitted=true;G.fast=true;b.completeNote('check')}
-   refreshBar()},
-  tick(dt){seatWork(dt,0)},
+   refreshBar();renderExq()},
+  tick(dt){seatWork(dt,0);const C=G.ex&&G.ex.cur,b=G.brain;
+   if(C&&b.daydream<=0&&C.cursor<C.U.length){C.t+=dt;
+     while(C.cursor<C.U.length&&C.t>=C.next){const u=C.U[C.cursor];
+       if(!u.skip&&!b.typical&&Math.random()<examSkipP()*(u.key?2.5:.6))u.skip=true;
+       if(!u.skip)u.at=G.segT;C.cursor++;C.next=C.t+(u.skip?0:.12+u.text.length*.05)}}
+   renderExq()},
   onOverflow(){scold('監考老師','{name}，考試中不要一直動來動去、東張西望！')},
   finish(){const E=G.ex;S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
-  bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length)return this.act('ans',String(list[E.i][2]));if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
+  bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length){if(E.cur&&E.cur.cursor<E.cur.U.length)return;return this.act('ans',String(list[E.i].a))}if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
  },
  {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
   card:'要把作業交到講台、去上廁所，鐘響前回座位。',pool:['福利社有新口味嗎？','下一節是什麼課？'],
@@ -1159,7 +1223,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    const ok=await qte({q:'你的臉一下子熱起來，好想回嗆……',btn:'😮‍💨 深呼吸（按住）',l1:'冷靜',l2:'理智線',need:2.0,rate:emoRate,hint:'心情越差，越難冷靜下來。'});
    S().held=ok;
    if(ok){G.brain.mood=clamp(G.brain.mood-5,0,100);await say('你（內心）','（你忍住了。但那句話在腦中重播了一整天。）')}
-   else if(G.save.gender==='M'){S().conflict=true;await say('你','「你再說一次啊！」（你推了他一把）');await scold('老師','{name}！又是你！下課到辦公室來！')}
+   else if(Math.random()<G.save.outward){S().conflict=true;await say('你','「你再說一次啊！」（你推了他一把）');await scold('老師','{name}！又是你！下課到辦公室來！')}
    else{S().conflict=true;S().masked++;G.brain.anx=clamp(G.brain.anx+15,0,100);G.brain.mood=clamp(G.brain.mood-10,0,100);await say('你（內心）','（你什麼都沒說，眼淚卻一直掉。你躲進廁所哭了一陣子。）');G.clock+=4}},
   async onTalk(e){
    if(e.id==='podium'&&!S().gave){S().gave=true;G.brain.completeNote('give');toast('📄 作業交了');Sound.good()}
@@ -1187,7 +1251,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   act(a){const r=G.rl;if(a==='run'&&r.phase==='run'){r.dist+=2.2*(G.brain.typical?1:1.25)*(G.brain.hyper?1.15:1);Sound.blip()}},
   tick(dt){const r=G.rl,b=G.brain,el=$('#rlTxt');r.t+=dt;
    if(r.phase==='ready'){
-     const base=G.save.gender==='M'?26:20;r.imp+=dt*(input.hold?1:3)*base*(1+b.rest/100);
+     const base=16+G.save.outward*15;r.imp+=dt*(input.hold?1:3)*base*(1+b.rest/100);
      const pb=$('#pbar');if(pb)pb.style.width=clamp(r.imp,0,100)+'%';if(el)el.textContent='預備……';
      if(r.imp>=100){r.tries++;S().falseStart++;Sound.bad();b.mood=clamp(b.mood-3,0,100);
        if(r.tries>=3){toast('搶跑太多次，老師讓你直接跑了');this.startRun()}
@@ -1216,15 +1280,15 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  {id:'mnight',map:'home',kind:'scene',t0:'22:30',t1:'22:30',real:0,title:'深夜',
   card:'作業、考試、朋友。今天好漫長。',
   setup(){standPlayer(13,7);G.player.dir='right';G.npcs=[{id:'mom',x:tc(14),y:tf(7),look:LOOKS.mom,dir:'left'}];G.ents=[]},
-  async begin(){const s=S(),b=G.brain,M=G.save.gender==='M';
+  async begin(){const s=S(),b=G.brain,O=G.save.outward;
    if(s.hw<100)await say('媽媽','作業又沒寫完？你整個晚上到底在幹嘛？');
    if(s.phoneMin>=30)await say('你（內心）','（今天光是「看一下手機」，就不見了 '+s.phoneMin+' 分鐘。你真的只是想看一下而已。）');
    if(s.exam<70)await say('你（內心）','（英文段考 '+s.exam+' 分。明明都會的……）');
    await diagnosisEvent(async()=>{
-     const notice=s.scold*1.2+(s.conflict?3:0)+(s.exam<70?2:0)+(M?2:0)-b.comp*2;
-     if(!M&&b.anx>=35){
+     const notice=s.scold*1.2+(s.conflict?3:0)+(s.exam<70?2:0)+O*3-b.comp*2;
+     if(b.anx>=35&&notice<8){
        await say('輔導老師','{name}，你最近好像很緊繃，常常一個人躲在廁所……我們聊聊好嗎？');
-       await say('旁白','輔導老師覺得你可能是「焦慮」。很多 ADHD 女生第一次求助，都是因為焦慮或憂鬱，ADHD 反而被漏掉。');
+       await say('旁白','輔導老師覺得你可能是「焦慮」。很多 ADHD 的孩子（尤其是女生）第一次求助，都是因為焦慮或憂鬱，ADHD 反而被漏掉。');
        return (await say('輔導老師','我們先處理焦慮？還是……要不要做更完整的評估？',{choices:['先處理焦慮就好','我想做更完整的評估']}))===1;
      }
      if(notice>=6){await say('導師（打電話給媽媽）','{name}最近上課常分心、跟同學起衝突，成績起伏很大。建議可以帶去做評估。');
@@ -1248,8 +1312,8 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
    ['下午寫的報告',s.mid+'%',g.mid+'%'],['被遊戲吃掉的時間',s.gameMin+' 分鐘','0 分鐘'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],
    ['⭐ 截止前一晚衝刺',(s.report-s.mid)+'%','不需要',true],['報告最後完成',s.report+'%',g.report+'%'],['寫完的時間',s.sleep||'—','下午就寫完了'],...commonRows(s,b,g)],
   cards:[
-   '🧱 <b>拖延不是懶</b><br>ADHD 大腦啟動無聊的事需要更多「燃料」。看起來像在偷懶，其實是在跟一道看不見的牆角力。把任務切小、先做 5 分鐘，牆會變薄。',
-   '⚡ <b>為什麼截止前反而做得完？</b><br>急迫感會讓大腦分泌提神物質，ADHD 的人常常要到「火燒屁股」才能專心。這招有效，但很傷身體，也很容易失手。']}},
+   '🧱 <b>拖延不是懶</b><br><b>遊戲裡：</b>無聊的事要先推開一道「開始的牆」。<br><b>現實中：</b>很多 ADHD 的人描述「知道要做，卻怎樣都開始不了」。把任務切小、先做 5 分鐘，通常比較容易開始。',
+   '⚡ <b>為什麼截止前反而做得完？</b><br><b>遊戲裡：</b>截止前一晚，大腦突然進入超專注。<br><b>現實中：</b>不少 ADHD 的人說要「火燒屁股」才進入狀態。這招有時有效，但很傷身體，也很容易失手。']}},
  segs:[
  {id:'dorm',map:'dorm',kind:'roam',t0:'08:00',t1:'08:40',real:95,dist:1,phone:true,phoneJump:10,title:'宿舍的早上',
   card:'九點十分的課。已經沒有人會叫你起床了。',pool:['今天穿什麼？','早餐要吃什麼？','室友昨天幾點睡的？'],
@@ -1260,7 +1324,7 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
     {id:'door',name:'房門',kind:'none',tx:7,ty:9,trigger:true}];
    G.ghost.plan=[[4,7,'card'],[9,3,'laptop'],[11,4,'charger'],[11,8,'water'],[7,8,null]]},
   async begin(){
-   for(let k=0;k<3;k++){const ok=await qte({q:'⏰ 鬧鐘響了……\n好想再睡五分鐘',btn:'💪 起床（按住）',l1:'起床的意志',l2:'鬧鐘',need:2.4,rate:()=>clamp(.45+G.brain.dopa/110,.3,1.1)*(sup('med')?1.3:1),hint:'動力越低，越爬不起來。'});
+   for(let k=0;k<3;k++){const ok=await qte({q:'⏰ 鬧鐘響了……\n好想再睡五分鐘',btn:'💪 起床（按住）',l1:'起床的意志',l2:'鬧鐘',need:2.4,rate:()=>clamp(.45+G.brain.dopa/110,.3,1.1)*(sup('med')?1.3:1),info:()=>'你現在「動力」'+Math.round(G.brain.dopa),hint:'動力越低，越爬不起來。'});
      if(ok)break;S().snooze++;G.clock+=10;toast('😴 按了貪睡……過了 10 分鐘')}
    if(S().snooze>=3)await say('你（內心）','（終於爬起來了……現在幾點？）');
    const L=[{key:'laptop',text:'帶筆電'},{key:'card',text:'帶學生證'},{key:'charger',text:'帶充電器'},{key:'water',text:'帶水壺'}];G.gb.addNotes(L);G.brain.addNotes(L)},
@@ -1279,7 +1343,7 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
      const L=[{key:'email',text:'下午兩點前寄分組名單'},{key:'report',text:'下週一交期末報告'}];G.gb.addNotes(L);G.brain.addNotes(L);
      if(writing){if(addWritten(L))toast('📒 你有在抄筆記，教授說的寫進筆記本了')}
      else toast('（筆記抄得太少，教授這段沒寫下來）')})},
-  tick(dt){seatWork(dt,100/60);ghostWork(dt,100/60);if(S().late)G.prog=Math.min(G.prog,85)},
+  tick(dt){seatWork(dt,100/48);ghostWork(dt,100/48);if(S().late)G.prog=Math.min(G.prog,85)},
   onOverflow(){toast('你坐不住了，起身到走廊晃了五分鐘。');G.clock+=5;G.prog=Math.max(0,G.prog-8)},
   finish(){S().notes=Math.round(G.prog);GS().notes=Math.round(G.gprog)},
   bot(){input.write=true;input.fidget=G.brain.rest>40},
@@ -1345,8 +1409,8 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    ['下班帶走鑰匙',yes(s.keys),yes(true)],['衝動購物',s.spent?'NT$'+s.spent.toLocaleString():'NT$0','NT$0'],['被訊息吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
   cards:[
    '👻 <b>看不見的任務</b><br>今天有些工作，從你的任務板上「消失」了——因為便利貼掉了。對 ADHD 來說，「眼睛看不到」幾乎等於「不存在」。把任務寫在看得到的地方，不是囉嗦，是必需品。',
-   '💔 <b>拒絕敏感</b><br>很多 ADHD 的人對批評特別敏感，一句小提醒也可能像被重擊。這跟從小到大累積的「又被罵」有關。',
-   '💡 <b>你的強項</b><br>點子多、遇到有興趣的事能超專注、危機時反應快——這些在工作上都是真正的優勢。適合的工作環境，能讓 ADHD 的人發光。']}},
+   '💔 <b>對批評特別敏感</b><br><b>遊戲裡：</b>一句小提醒，也會觸發「情緒潰堤」。<br><b>現實中：</b>有些 ADHD 的人對批評特別敏感，可能跟從小累積的「又被罵」經驗有關。',
+   '💡 <b>這位角色的強項</b><br>點子多、遇到有興趣的事能超專注。不是每個 ADHD 的人都一樣，但找到適合的工作與環境，很多人能發揮所長。']}},
  segs:[
  {id:'office_in',map:'office',kind:'roam',t0:'08:40',t1:'09:00',real:60,dist:1,phone:true,phonePool:WORK_PHONE,phoneJump:3,title:'進公司',
   card:'九點要開晨會。先打卡、拿筆記本，再進會議室。',pool:['今天午餐吃什麼？','昨天那封信回了沒？'],
@@ -1373,11 +1437,11 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
   async begin(){
    after(8,async()=>{await say('主管','今天四件事：下午三點前回客戶 email；更新報價單；訂下週三的會議室；還有，專案簡報交給 {name}，你最有創意。');
      const L=[{key:'email',text:'三點前回客戶 email'},{key:'quote',text:'更新報價單'},{key:'room',text:'訂下週三會議室'},{key:'slides',text:'做專案簡報'}];G.gb.addNotes(L);G.brain.addNotes(L)});
-   after(34,async()=>{const ok=await qte({q:'主管還在講，你突然想到一個超棒的點子！好想馬上說出來——',btn:'🤐 等主管講完（按住）',need:G.save.gender==='M'?2.2:1.9,hint:'「坐不住」越高，越難等。'});
+   after(34,async()=>{const ok=await qte({q:'主管還在講，你突然想到一個超棒的點子！好想馬上說出來——',btn:'🤐 等主管講完（按住）',need:1.7+G.save.outward*.8,hint:'「坐不住」越高，越難等。'});
      S().idea=true;
      if(ok){G.brain.mood=clamp(G.brain.mood+6,0,100);await say('主管','{name}，你剛剛說的點子很好，這個可以試試看！')}
      else{S().interrupt=true;await say('你','「欸我想到了！我們可以——」');await scold('主管','……我還沒講完。等一下再說。')}})},
-  tick(dt){seatWork(dt,100/50);ghostWork(dt,100/50)},
+  tick(dt){seatWork(dt,100/42);ghostWork(dt,100/42)},
   onOverflow(){toast('你忍不住起身去倒水，漏聽了一段。');G.prog=Math.max(0,G.prog-10)},
   finish(){S().listen=Math.round(G.prog);GS().listen=Math.round(G.gprog)},
   bot(){if(G.qte){input.hold=true;return}input.write=true;input.fidget=G.brain.rest>40},
@@ -1428,7 +1492,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    const ok=await qte({q:small?'只是一個小提醒……但你胸口一緊，腦中開始重播「我又搞砸了」':'你的臉發燙、心跳加速，好想立刻反駁……',btn:'😮‍💨 深呼吸（按住）',l1:'冷靜',l2:'情緒潰堤',need:small?1.6:2.3,rate:emoRate,hint:'心情越差，越難踩住情緒的煞車。'});
    S().calm=ok;
    if(ok){await say('你','（深呼吸）……謝謝提醒，我馬上處理。');G.brain.mood=clamp(G.brain.mood-4,0,100)}
-   else if(G.save.gender==='M'){await say('你','「我已經很努力了好嗎！你只看得到我做錯的！」（語氣很衝）');await scold('主管','……你這是什麼態度？')}
+   else if(Math.random()<G.save.outward){await say('你','「我已經很努力了好嗎！你只看得到我做錯的！」（語氣很衝）');await scold('主管','……你這是什麼態度？')}
    else{S().masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);G.brain.mood=clamp(G.brain.mood-12,0,100);await say('你','「好，我會改。」');await say('你（內心）','（你走進廁所，哭了十五分鐘，補好妝再回座位。沒有人知道。）')}
    endSeg()},
  },
@@ -1455,7 +1519,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    if(s.spent)await say('你（內心）','（信用卡通知：今天又刷了 NT$'+s.spent.toLocaleString()+'。你根本不記得自己買了什麼。）');
    await diagnosisEvent(async()=>{await say('你（內心）','（這個月已經第三次被主管約談了。\n你每天都比別人更努力，卻總是做不好。好累。）');
      const i=await say('你（內心）','要不要去看看醫生？',{choices:['去身心科看看','再撐一下就好']});
-     if(i===0&&G.save.gender==='F')await say('醫師','很多女性是因為焦慮、憂鬱或倦怠來看診，到成年才發現底下其實是 ADHD。');
+     if(i===0&&G.save.outward<.5)await say('醫師','很多人（尤其是女性）是因為焦慮、憂鬱或倦怠來看診，到成年才發現底下其實是 ADHD。');
      return i===0});
    endSeg()},
  },
@@ -1470,7 +1534,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    ['湯沒有燒焦',yes(s.soupOk),yes(true)],['晾衣服',yes(s.laundry),yes(true)],['陪小樂看功課',yes(s.khw),yes(true)],
    ['跟伴侶談話時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
   cards:[
-   '🧬 <b>ADHD 會遺傳</b><br>研究估計 ADHD 的遺傳度大約七成以上。很多大人是在孩子確診時，才發現「原來我也是」。',
+   '🧬 <b>ADHD 和家族有關</b><br>研究發現基因扮演重要角色（<a href="https://www.nimh.nih.gov/health/publications/attention-deficit-hyperactivity-disorder-what-you-need-to-know" target="_blank" rel="noopener">NIMH</a>）。不少大人是在孩子確診時，才發現「原來我也是」。',
    '🏠 <b>家，是最難的關卡</b><br>工作有主管、有截止日；家務沒有人提醒、永遠做不完，還要同時記好多件事。這對 ADHD 的大腦是最大的考驗，也最容易讓伴侶誤會成「不在乎」。',
    '🤝 <b>伴侶可以怎麼做？</b><br>把事情寫在看得到的地方、一次交代一件、用「我們一起想辦法」取代「你怎麼又忘了」。']}},
  segs:[
@@ -1536,9 +1600,9 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    await say('伴侶',M?'我有時候覺得……我好像在照顧兩個小孩。家裡的事好像都是我在記。':'家裡的事好像都是我在提醒你。我不是要怪你，我只是好累。');
    const ok=await qte({q:'你覺得被指責了。委屈、羞愧一下子湧上來……',btn:'😮‍💨 深呼吸（按住）',l1:'冷靜',l2:'情緒潰堤',need:2.2,rate:emoRate,hint:'心情越差，越難冷靜。'});
    s.calm=ok;
-   if(!ok){if(M){await say('你','「我每天上班也很累好嗎！你以為我故意的嗎？」');G.brain.mood=clamp(G.brain.mood-10,0,100)}
+   if(!ok){if(Math.random()<G.save.outward){await say('你','「我每天上班也很累好嗎！你以為我故意的嗎？」');G.brain.mood=clamp(G.brain.mood-10,0,100)}
      else{s.masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);await say('你（內心）','（你沒有回嘴。腦中一直重播：「我是個很糟的媽媽、很糟的伴侶。」）')}}
-   const dx=canUseSupports('family');
+   const dx=diagnosedBefore('family');
    const choices=dx?['跟伴侶說明 ADHD，一起想辦法','道歉，說下次會注意']:['道歉，說下次會注意','「我就是這樣，你又不是不知道」'];
    const i=await say('你','……',{choices});
    if(dx&&i===0){s.teamwork=true;await say('你','我不是不在乎。我的大腦真的很難記住這些……我們一起把事情寫在冰箱的白板上，好嗎？');await say('伴侶','……原來是這樣。好，我們一起想辦法。');G.brain.mood=clamp(G.brain.mood+15,0,100)}
@@ -1552,7 +1616,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
   async begin(){
    await say('聯絡簿・老師留言','小樂上課常常坐不住、東西常常忘記帶，也常衝口而出。建議家長可以帶去兒童心智科做評估，了解孩子的需要。');
    await say('你（內心）','（……這段話，你好像在哪裡看過。）');
-   if(canUseSupports('family')){
+   if(diagnosedBefore('family')){
      await say('你','（你蹲下來抱住小樂）沒關係，{parent}小時候也是這樣。我們一起去看醫生，找適合你的方法，好嗎？');
      await say('小樂','……真的嗎？那我不是壞小孩？');await say('你','當然不是。你的大腦只是跟別人不太一樣。');S().kidEval=true;G.brain.mood=clamp(G.brain.mood+10,0,100);
    }else{
@@ -1589,6 +1653,7 @@ function setStageMode(kind){
 function refreshBar(){if(G.seg&&G.seg.bar){$('#seatbar').innerHTML=G.seg.bar();bindHoldButtons($('#seatbar'))}}
 function startChapter(id,segIdx){
   const ch=chapterDef(id);if(!ch)return;G.chapter=ch;const sv=G.save;
+  if(!Number.isFinite(+sv.outward))sv.outward=sv.gender==='M'?.65:.35;
   const resume=!!(sv.run&&sv.run.chapter===id&&segIdx>0&&sv.run.state);
   G.run=resume?sv.run.state:newRun(ch);if(!resume)segIdx=0;
   segIdx=clamp(segIdx,0,ch.segs.length-1);
@@ -1597,14 +1662,14 @@ function startChapter(id,segIdx){
   G.run.bag=G.run.bag||{};G.run.flags=G.run.flags||{};G.run.supports=Array.isArray(G.run.supports)?G.run.supports.filter(x=>SUPPORTS.some(z=>z.id===x)):[];
   const num=(v,d)=>Number.isFinite(+v)?+v:d;
   const go=()=>{G.brain=new Brain(sv,false,brainCtx());G.gb=new Brain(sv,true,brainCtx());G.brain.on=onBrain;G.gb.on=onGhostBrain;
-    if(resume){G.brain.mood=num(sv.run.mood,70);G.brain.anx=num(sv.run.anx,15)}
+    if(resume){G.brain.mood=num(sv.run.mood,70);G.brain.anx=num(sv.run.anx,15);G.brain.energy=num(sv.run.energy,100)}
     hookWritten();
     showSegCard(segIdx)};
   if(!resume&&canUseSupports(id))supportScreen(go);else go();
 }
 function autosave(){
   const sv=G.save;sv.seg=G.segIndex;
-  sv.run={chapter:G.chapter.id,state:JSON.parse(JSON.stringify(G.run)),mood:G.brain.mood,anx:G.brain.anx};
+  sv.run={chapter:G.chapter.id,state:JSON.parse(JSON.stringify(G.run)),mood:G.brain.mood,anx:G.brain.anx,energy:G.brain.energy};
   Save.store(G.slot,sv);
 }
 function showSegCard(i){
@@ -1623,7 +1688,8 @@ function beginSeg(i){
   // 換時段＝休息過：動力與專注部分回復（不完全回滿）
   for(const bb of [G.brain,G.gb]){const base=bb.typical?70:55;bb.dopa=Math.max(bb.dopa,lerp(bb.dopa,base,.8));bb.focus=Math.max(bb.focus,bb.typical?85:60);
     if(bb.shDopa!=null){bb.shDopa=Math.max(bb.shDopa,lerp(bb.shDopa,55,.8));bb.shFocus=Math.max(bb.shFocus,60)}}
-  G.sprog=0;G.swall=null;G.sprogUsed=false;
+  G.sprog=0;G.swall=null;G.sprogUsed=false;G.segScold=0;
+  G.brain.energy=clamp(G.brain.energy+40,0,100);
   $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());document.querySelectorAll('.bub.fly').forEach(e=>e.remove());G.flyEl=null;
   seg.setup();
   G.ents.forEach(e=>{e.px=tc(e.tx);e.py=e.onDesk?e.ty*T+6:tf(e.ty)-4});
@@ -1637,6 +1703,7 @@ async function endSeg(){
   if(ending||!G.running)return;ending=true;
   try{
     G.running=false;input.write=input.fidget=input.hold=false;
+    if(G.seg&&G.seg.kind!=='scene')S().energyEnd=Math.round(G.brain.energy);
     if(G.sprogUsed&&sup('med'))(G.run.medLog||(G.run.medLog=[])).push([G.seg.title,Math.round(G.prog),Math.round(G.sprog)]);
     const seg=G.seg;if(seg.finish)await seg.finish();
     $('#seatbar').style.display='none';$('#lab').style.display='none';$('#qte').style.display='none';$('#daydream').style.display='none';
@@ -1662,12 +1729,11 @@ function iqText(stage,iq){
     :`IQ 管的是理解，ADHD 卡的是自我管理。沒有人幫你安排的大人生活，是 ADHD 最大的挑戰。`;
 }
 function genderText(stage,g,s,b){
-  if(stage==='kid')return g==='M'?'男生的 ADHD 常常「看得見」：坐不住、插話、衝動，所以比較常被罵，但也比較早被發現。'
-    :`女生的 ADHD 常常「看不見」：安靜、發呆、拼命偽裝成沒事。你今天硬忍住了 ${s.masked} 次，沒人發現，但焦慮累積到 ${Math.round(b.anx)}。很多女生到成年才被診斷。`;
-  if(stage==='teen')return g==='M'?'青春期的男生常因衝突、違規被注意到，容易被貼上「問題學生」的標籤，ADHD 反而沒人想到。'
-    :'青春期的女生常被看成「焦慮」「情緒化」「愛哭」，ADHD 反而被漏掉。偽裝得越好，越沒有人發現你有多累。';
-  return g==='M'?'成年男性的過動常轉成「內在躁動」：停不下來、一直換工作、衝動花錢或開快車。外表看起來只是「急性子」。'
-    :'成年女性常背著「什麼都該記得」的期待。ADHD 讓這份期待變成每天的自責。很多人是因為焦慮、憂鬱，或孩子確診，才發現自己也是。';
+  const O=G.save.outward,style=O>=.6?'比較外顯':O<=.4?'比較內隱':'介於外顯和內隱之間';
+  const base=`這次你的角色${style}。研究上，男生的 ADHD 平均比較常「看得見」（坐不住、衝動），女生平均比較常「看不見」（發呆、拼命偽裝）——但這只是群體傾向：女生也可能很衝動，男生也可能默默硬忍。`;
+  if(stage==='kid')return base+(O<.5?`你今天硬忍住了 ${s.masked} 次，沒人發現，焦慮累積到 ${Math.round(b.anx)}。越會忍的孩子，越容易被漏掉。`:'外顯的孩子常被罵，但也比較早被大人注意到。');
+  if(stage==='teen')return base+(O<.5?'青春期越會偽裝，大人越容易把你看成「焦慮」「情緒化」，ADHD 反而被漏掉。':'外顯的青少年常因衝突、違規被注意到，容易被貼上「問題學生」的標籤。');
+  return base+(O<.5?'很多成年人是因為焦慮、憂鬱、倦怠，或孩子確診，才發現自己也是 ADHD。':'成年後，過動常轉成「內在躁動」：停不下來、一直換工作、衝動花錢。外表看起來只是「急性子」。');
 }
 function finishChapter(){
   const ch=G.chapter,sv=G.save,s=S(),g=GS(),b=G.brain,f=G.run.flags;
@@ -1685,7 +1751,10 @@ function finishChapter(){
   const supCard=sp.length?`<div class="card">🧰 <b>這一章你用了：</b>${sp.map(id=>{const x=SUPPORTS.find(z=>z.id===id);return x?x.icon+' '+x.name:''}).join('、')}。<br>可以換不同的策略重玩這一章，比較看看差別。</div>`:'';
   const dxCard=newDx?`<div class="card">🩺 <b>你在${ch.name.split('　')[1]}（${ch.age}）確診了。</b>${nx?'下一章開始，你可以選擇輔助策略。':''}</div>`
     :sv.flags.diagnosed?'':`<div class="card">🔍 <b>你還沒確診。</b>${nx?'下一章，你還是得靠自己的力氣「跟上大家」。':''}</div>`;
-  screen(`<div class="scr"><h2>${ch.name}・結束</h2><p>這是你（ADHD）和「平行世界裡一般大腦的你」的比較：</p>
+  const burd=[[s.lost,'便利貼掉了 '+s.lost+' 張'],[s.hijacks,'被念頭拉走 '+s.hijacks+' 次'],[(s.phoneMin||0)/10,'被手機吃掉 '+(s.phoneMin||0)+' 分鐘'],[s.scold*1.5,'被罵 '+s.scold+' 次']].sort((a,b)=>b[0]-a[0])[0];
+  const helps=[];if(G.run.flags.boardList||(G.run.written||[]).length)helps.push('寫下來的清單');if((s.fidgetSec||0)>5)helps.push('轉筆、動一動');(G.run.supports||[]).forEach(id=>{const x=SUPPORTS.find(z=>z.id===id);if(x&&x.id!=='list')helps.push(x.name)});
+  const sumCard=`<div class="card">🔎 <b>今天最卡的地方：</b>${burd&&burd[0]>0?burd[1]:'沒有特別卡住'}。<br>🤝 <b>今天有幫上忙的：</b>${helps.length?[...new Set(helps)].join('、'):'這一章沒有用到任何支持——試試看用不同策略重玩，比較差別。'}</div>`;
+  screen(`<div class="scr"><h2>${ch.name}・結束</h2>${sumCard}<p>你（ADHD）和「一般的你」的比較。<br><small style="color:var(--sub)">「一般的你」是教學用的對照分身：同樣的一天，大腦的管理系統沒有額外負擔時大概的樣子；不是一般人的平均分數。遊戲裡的數字都是簡化的平衡數值。</small></p>
   <table class="cmp"><tr><th>項目</th><th>你（ADHD）</th><th>一般的你</th></tr>${rep.rows.map(r=>`<tr class="${r[3]?'star':''}"><td>${r[0]}</td><td class="me">${r[1]}</td><td class="gh">${r[2]}</td></tr>`).join('')}</table>
   ${dxCard}${supCard}<div class="card">🧠 <b>IQ：</b>${iqText(ch.stage,sv.iq)}</div><div class="card">👤 <b>性別：</b>${genderText(ch.stage,sv.gender,s,b)}</div>
   <h3>大腦小卡</h3>${rep.cards.filter(Boolean).map(c=>`<div class="card">${c}</div>`).join('')}
@@ -1704,18 +1773,19 @@ function lifeRecap(){
     :`你在 ${dxc.age}確診。在那之前，你一直以為是自己不夠好。知道之後，你終於可以停止責怪自己，開始找方法。`;
   screen(`<div class="scr"><h2>🌅 人生回顧：${esc(sv.name)}</h2><p style="white-space:pre-line;font-size:17px">${msg}</p>
    <table class="cmp"><tr><th>人生階段</th><th>被罵／被唸</th><th>心情</th><th></th></tr>${rows}</table>
-   <h3>ADHD 也帶給你這些</h3><div class="card">🔦 <b>超專注：</b>遇到有興趣的事，你比誰都投入。<br>⚡ <b>精力：</b>運動、危機時刻，你的反應最快。<br>💡 <b>創意：</b>你的點子常常讓人眼睛一亮。</div>
+   <h3>這位角色身上的亮點</h3><div class="card">🔦 <b>超專注：</b>遇到有興趣的事，你能投入到忘記時間。<br>⚡ <b>精力：</b>需要動起來的時候，你常常最快。<br>💡 <b>點子：</b>你的想法常讓人眼睛一亮。<br><small>不是每個 ADHD 的人都有這些亮點，每個人都不一樣。</small></div>
    <h3>如果你身邊有 ADHD 的人</h3><div class="card">1. 把事情寫下來、放在看得到的地方，比說十遍有用。<br>2. 一次交代一件事。<br>3. 允許他動一動：轉筆、站著、走一走。<br>4. 批評時溫和一點——他們聽到的，往往比你說的重。<br>5. 「我們一起想辦法」比「你怎麼又忘了」有用得多。</div>
    <button class="mbtn pri" id="again">換個設定，再活一次</button><button class="mbtn" id="toLife">回到人生地圖</button><div class="disc">${DISCLAIMER}</div></div>`);
   $('#again').onclick=()=>slotScreen('new');$('#toLife').onclick=lifeMap;
 }
 const SCIENCE=[
-  '🫧 <b>念頭泡泡｜大腦的「過濾網」</b><br>一般大腦會自動把不重要的念頭擋掉。ADHD 大腦的過濾網比較鬆（和前額葉的「抑制控制」有關），念頭一直冒出來，也很容易被拉走。',
-  '📝 <b>便利貼｜工作記憶</b><br>工作記憶像大腦裡的小白板，暫時記著「現在要做什麼」。ADHD 的白板比較小、字也消失得比較快——不是不在乎，是真的記不住。寫下來、列清單，就是幫大腦外接一塊白板。',
-  '⚡ <b>動力｜多巴胺</b><br>多巴胺像大腦的「提神燃料」。ADHD 大腦調節多巴胺的方式不同：無聊的事燒得特別快，有興趣的事卻能超專注。',
-  '🦵 <b>坐不住</b><br>對 ADHD 來說，動一動是大腦在幫自己提神。允許轉筆、捏減壓球、站著寫，反而更能專心。身體越躁動，衝動的煞車也越難踩。',
-  '⏰ <b>時間感</b><br>ADHD 常有「時間盲」：只分得出「現在」和「不是現在」。看得見的時鐘、計時器很有幫助。',
-  '🔦 <b>超專注</b><br>ADHD 不是「不能專心」，而是專注的開關不聽指揮——遇到有興趣的事，會專心到聽不見鐘聲。這是優勢，也是需要別人提醒的地方。',
+  '🫧 <b>念頭泡泡</b><br><b>遊戲裡：</b>念頭冒得多，來不及丟就被拉走；「過濾網」只是比喻。<br><b>現實中：</b>很多 ADHD 的人描述容易被不相關的念頭或聲音帶走，做事做到一半就飄走了。（<a href="https://www.nimh.nih.gov/health/publications/attention-deficit-hyperactivity-disorder-what-you-need-to-know" target="_blank" rel="noopener">NIMH</a>）',
+  '📝 <b>便利貼｜工作記憶</b><br><b>遊戲裡：</b>2 格、幾十秒褪色，是遊戲的平衡數值，不是臨床量尺。<br><b>現實中：</b>常見忘記別人交代的事、遺失東西、走到一半忘了要做什麼——不是不在乎。寫下來、放在看得到的地方，就是幫大腦外接一塊白板。（<a href="https://www.nimh.nih.gov/health/publications/attention-deficit-hyperactivity-disorder-what-you-need-to-know" target="_blank" rel="noopener">NIMH</a>）',
+  '⚡ <b>動力</b><br><b>遊戲裡：</b>把動力畫成一條燃料條，它不代表真的多巴胺濃度。<br><b>現實中：</b>ADHD 的成因還在研究，可能牽涉很多因素。不少人描述「無聊的事很難開始、有興趣的事停不下來」。（<a href="https://www.nimh.nih.gov/health/publications/attention-deficit-hyperactivity-disorder-what-you-need-to-know" target="_blank" rel="noopener">NIMH</a>）',
+  '🦵 <b>坐不住</b><br><b>遊戲裡：</b>坐著時量表會一直上升，轉筆可以降下來。<br><b>現實中：</b>有些人動一動反而比較能專心；長大後，過動常變成「心裡停不下來」的躁動。（<a href="https://www.cdc.gov/adhd/signs-symptoms/" target="_blank" rel="noopener">CDC</a>）',
+  '⏰ <b>時間感</b><br><b>遊戲裡：</b>這位角色的時鐘是模糊的。<br><b>現實中：</b>很多 ADHD 的人不容易掌握時間過了多久，常常低估事情要花的時間。看得見的時鐘、計時器有幫助。',
+  '🔦 <b>超專注</b><br><b>遊戲裡：</b>有興趣時，念頭全部消失，連鐘聲都聽不太到。<br><b>現實中：</b>研究發現 ADHD 症狀和較多「超專注」經驗有關，但不是每個人都有，也不能拿來診斷。（<a href="https://pubmed.ncbi.nlm.nih.gov/30267329/" target="_blank" rel="noopener">Hupfeld 等 2019</a>）',
+  '🧰 <b>支持不用等診斷</b><br>寫下來、拆小步驟、安靜的位置、允許動一動——這些生活上的調整，大人不必等正式診斷就可以先做。藥物則一定要醫師評估。（<a href="https://www.nice.org.uk/guidance/ng87/chapter/Recommendations" target="_blank" rel="noopener">NICE NG87</a>）',
 ];
 const DISCLAIMER='⚠️ 本遊戲是簡化的體驗，用來幫助理解，不是醫學工具。每個 ADHD 的人感受都不一樣，也不能用這個遊戲自我診斷。如果有疑問，請洽詢兒童心智科、身心科，或學校輔導室。';
 
@@ -1752,10 +1822,10 @@ function chapterLabel(d){
 function createScreen(){
   let gender='M',iq=100;
   const iqDesc=v=>v<90?'中下：學習要多花一點力氣；ADHD 的影響更早被看見。':v<110?'一般範圍。':v<125?'中上：前期能靠聰明補償，比較晚被發現。':'很高：很會掩飾，常常到大學、出社會才被發現。工作記憶多一格便利貼。';
-  const gDesc=g=>g==='M'?'男生的 ADHD 常偏「外顯」：坐不住、衝動、插話——常被罵，但比較早被發現。':'女生的 ADHD 常偏「內隱」：發呆、拼命偽裝成沒事——比較晚被發現，常伴隨焦慮。';
+  const gDesc=g=>g==='M'?'研究上，男生的 ADHD 平均比較常「外顯」：坐不住、衝動、插話——常被罵，但比較早被發現。':'研究上，女生的 ADHD 平均比較常「內隱」：發呆、拼命偽裝成沒事——比較晚被發現，常伴隨焦慮。';
   screen(`<div class="scr"><h2>建立你的角色</h2>
    <div class="field"><label>名字</label><input type="text" id="cName" maxlength="8" value="小安"></div>
-   <div class="field"><label>性別</label><div class="seg2"><button id="gM" class="on">男生</button><button id="gF">女生</button></div><div class="desc" id="gD"></div><div style="font-size:12px;color:var(--sub);margin-top:4px">※ 這是研究上的統計傾向，每個人都不一樣。</div></div>
+   <div class="field"><label>性別</label><div class="seg2"><button id="gM" class="on">男生</button><button id="gF">女生</button></div><div class="desc" id="gD"></div><div style="font-size:12px;color:var(--sub);margin-top:4px">※ 這只是群體傾向。每個角色會隨機帶一點自己的個性：女生也可能很衝動，男生也可能默默硬忍。</div></div>
    <div class="field"><label>IQ：<span id="iqV">100</span></label><input type="range" id="cIQ" min="80" max="140" step="1" value="100"><div class="desc" id="iqD"></div></div>
    <div class="field"><label>ADHD 類型</label><div class="desc">混合型（注意力不足 ＋ 過動衝動）</div></div>
    <button class="mbtn pri" id="cGo">開始人生</button><button class="mbtn" id="back">返回</button></div>`);
@@ -1764,7 +1834,8 @@ function createScreen(){
   $('#cIQ').oninput=e=>{iq=clamp(parseInt(e.target.value,10)||100,80,140);upd()};upd();
   $('#cGo').onclick=()=>{
     const name=($('#cName').value||'').replace(/[<>]/g,'').trim().slice(0,8)||'小安';
-    G.save=normalizeSave({name,gender,iq,chapter:'elem',seg:0,completed:[],flags:{},history:{},run:null,created:Date.now()});
+    const outward=clamp((gender==='M'?.65:.35)+rand(-.22,.22),.1,.9);
+    G.save=normalizeSave({name,gender,iq,outward,chapter:'elem',seg:0,completed:[],flags:{},history:{},run:null,created:Date.now()});
     Save.store(G.slot,G.save);lifeMap();
   };
   $('#back').onclick=()=>slotScreen('new');
@@ -1778,7 +1849,8 @@ function lifeMap(){
     return `<div class="lnode ${done?'done ':''}${open?'open':'lock'}" data-id="${c.id}"><div class="i">${c.icon}</div><b>${c.name}</b><div class="a">${c.age}</div><div style="font-size:12px;margin-top:4px">${st}</div></div>`}).join('<div style="align-self:center;color:var(--sub)">→</div>');
   const dxc=sv.flags.diagnosed?CHAPTERS.find(c=>c.id===sv.flags.diagnosed):null;
   const dx=dxc?'🩺 已確診（'+dxc.name+'・'+dxc.age+'）':'🔍 尚未確診';
-  screen(`<div class="scr"><h2>${esc(sv.name)} 的人生地圖</h2><p>${sv.gender==='M'?'男':'女'}・IQ ${sv.iq}・ADHD 混合型・${dx}</p>
+  const sty=sv.outward>=.6?'比較外顯':sv.outward<=.4?'比較內隱':'外顯／內隱各半';
+  screen(`<div class="scr"><h2>${esc(sv.name)} 的人生地圖</h2><p>${sv.gender==='M'?'男':'女'}・IQ ${sv.iq}・ADHD 混合型（${sty}）・${dx}</p>
    <div class="life">${nodes}</div>
    ${sv.completed.includes('family')?'<button class="mbtn pri" id="recap">🌅 人生回顧</button>':''}
    <button class="mbtn" id="home">回主選單</button></div>`);
@@ -1896,6 +1968,7 @@ function step(dt){
     if(input.hold)q.prog+=dt*r;else q.prog=Math.max(0,q.prog-dt*.6);
     $('#qteP').style.width=clamp(q.prog/q.need*100,0,100)+'%';$('#qteT').style.width=clamp((1-q.t/q.win)*100,0,100)+'%';
     $('#qteBtn').classList.toggle('held',input.hold);
+    $('#qteInfo').textContent=q.info?q.info()+' → '+q.l1+'只剩 '+Math.round(q.rate()*100)+'%':'';
     if(q.prog>=q.need)finishQTE(true);else if(q.t>=q.win)finishQTE(false);
   }
   // 玩家移動
@@ -1929,7 +2002,7 @@ function step(dt){
     if(e.follow){const n=G.npcs.find(n=>n.id===e.follow);if(n){e.px=n.x;e.py=n.y-4}}
     if(e.orbitBall){const k=G.npcs.find(n=>n.orbit);if(k){e.px=k.x+8;e.py=k.y+2}}}
   // 大腦
-  const fid=input.fidget&&seg.kind==='seat';
+  const fid=input.fidget&&seg.kind==='seat';if(fid&&G.run)S().fidgetSec=(S().fidgetSec||0)+dt;
   const working=seg.kind==='seat'&&(input.write||seg.interesting||(seg.isWorking&&seg.isWorking()));
   const inPlay=G.player&&G.map.name==='school'&&G.player.y<tf(11)&&G.player.x>tc(19.5);
   G.inPlayground=inPlay;
@@ -2021,7 +2094,7 @@ function render(t){
 }
 
 /* ================= 大腦面板 UI ================= */
-const METERS=[['focus','專注力','#f0b84a'],['dopa','動力','#7fd08a'],['rest','坐不住','#ef7a6a'],['mood','心情','#7fb8e8'],['anx','焦慮','#b58ae8']];
+const METERS=[['focus','專注力','#f0b84a'],['dopa','動力','#7fd08a'],['energy','精神力','#f6b8c4'],['rest','坐不住','#ef7a6a'],['mood','心情','#7fb8e8'],['anx','焦慮','#b58ae8']];
 function buildMeters(el){el.innerHTML=METERS.map(([k,n,c])=>`<div class="meter" data-k="${k}"><span class="n">${n}</span><span class="b"><i style="background:${c}"></i></span><span class="v"></span></div>`).join('')}
 buildMeters($('#metersMe'));buildMeters($('#metersGh'));
 let uiAcc=0;
@@ -2044,7 +2117,9 @@ function updateBrainUI(dt){
     if(t.gone){if(el&&!el.classList.contains('pop')){el.classList.add('pop');setTimeout(()=>el.remove(),260)}continue}
     seen.add(String(t.id));
     if(!el){el=document.createElement('div');el.className='bub '+t.kind;el.dataset.id=t.id;el.style.left=t.x+'%';el.style.top=t.y+'%';el.innerHTML=esc(t.text)+'<i></i>';
-      el.addEventListener('pointerdown',ev=>{ev.preventDefault();if(G.paused||G.dlg)return;if(b.dismiss(t.id)){Sound.pop()}});cloud.appendChild(el)}
+      el.addEventListener('pointerdown',ev=>{ev.preventDefault();if(G.paused||G.dlg)return;const r=b.dismiss(t.id);
+        if(r==='tired'){el.classList.remove('shake');void el.offsetWidth;el.classList.add('shake');if(!G.tiredT||performance.now()-G.tiredT>2500){G.tiredT=performance.now();toast('😮‍💨 精神力不夠了……壓不下去')}}
+        else if(r)Sound.pop()});cloud.appendChild(el)}
     el.querySelector('i').style.transform='scaleX('+clamp(1-t.age/t.max,0,1)+')';
   }
   cloud.querySelectorAll('.bub:not(.pop)').forEach(el=>{if(!seen.has(el.dataset.id))el.remove()});
@@ -2076,8 +2151,9 @@ function renderNotes(el,b,ghost){
 function fallNote(text){const el=$('#notesMe'),d=document.createElement('div');d.className='note fall';d.textContent=text;el.appendChild(d);setTimeout(()=>d.remove(),1300)}
 function renderMeters(el,b){
   el.querySelectorAll('.meter').forEach(m=>{const k=m.dataset.k;const v=Math.round(b[k]);
-    if(k==='anx'&&!b.masking&&!b.typical&&b.anx<25){m.style.display='none';return}
-    if(k==='anx'&&b.typical){m.style.display=G.save.gender==='F'?'flex':'none'}else m.style.display='flex';
+    const showAnx=G.brain&&(G.brain.masking||G.brain.anx>=25);
+    if(k==='anx'&&!showAnx){m.style.display='none';return}
+    m.style.display='flex';
     m.querySelector('i').style.width=v+'%';m.querySelector('.v').textContent=v});
 }
 
