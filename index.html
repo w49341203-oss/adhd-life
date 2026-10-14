@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.5.3';
+const VERSION='v0.5.4';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1231,7 +1231,7 @@ function buildQ(q,careful,unk){
   return{U,cursor:0,t:0,next:.25,lines:ql+1};
 }
 function renderExq(){const el=$('#exq');if(!el||!G.ex||!G.ex.cur)return;const C=G.ex.cur,b=G.brain,now=G.segT;
-  const hold=b.typical?999:1.2+b.focus/25;let html='';
+  const hold=999;let html='';
   for(let li=0;li<C.lines;li++){let row='';for(const u of C.U){if(u.line!==li||u.skip||u.at==null)continue;const age=now-u.at;const op=age<hold?1:Math.max(.22,1-(age-hold)/2.5);row+='<span style="opacity:'+op.toFixed(2)+'">'+esc(u.text)+'</span>'}
     if(row)html+='<div>'+row+'</div>'}
   el.innerHTML=html||'<span style="opacity:.4">（讀題中……）</span>'}
@@ -1246,7 +1246,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
   cards:[
    s.relay>g.relay?`⭐ <b>你跑贏了一般的你：</b>${s.relay} 公尺 vs ${g.relay} 公尺。很多 ADHD 的人精力旺盛、在運動和需要爆發力的場合特別亮眼。`:'',
-   '📖 <b>讀題時字會淡掉、會跳字跳行</b><br><b>遊戲裡：</b>讀到後面，前面就淡掉；有時眼睛直接跳過一個字（像「不是」）或一整行。<br><b>現實中：</b>很多 ADHD 的人說題目要讀好幾次、常漏看關鍵字或跳行，這和注意力飄走、工作記憶有關。至於把字看反、讀錯字，比較像「讀寫障礙」的特徵；兩者常常一起出現，但不是每個 ADHD 都會。',
+   '📖 <b>讀題時會跳字跳行</b><br><b>遊戲裡：</b>眼睛有時直接跳過一個字（像「不是」）或一整行，自己卻沒發現；再看一次，才看到漏掉的字。<br><b>現實中：</b>很多 ADHD 的人說題目要讀好幾次、常漏看關鍵字或跳行，這和注意力飄走、工作記憶有關。至於把字看反、讀錯字，比較像「讀寫障礙」的特徵；兩者常常一起出現，但不是每個 ADHD 都會。',
    '📱 <b>手機為什麼特別難放下？</b><br><b>遊戲裡：</b>手機念頭一贏，時鐘就跳 15 分鐘。<br><b>現實中：</b>很多 ADHD 的人說，新鮮、立刻有回饋的東西特別難抗拒。「把手機放到別的房間」通常比「靠意志力不看」有效。',
    '💢 <b>情緒煞車</b><br><b>遊戲裡：</b>心情越差，越難按住「深呼吸」。<br><b>現實中：</b>不少 ADHD 的人說情緒來得又快又大，被嘲笑或批評時很難只靠忍。這不是脾氣差，也不是每個人都這樣。']}},
  segs:[
@@ -1288,15 +1288,15 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
      :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">背面也寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button></div>';
    else{const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
      body='<div id="exq"></div>'
-       +'<div class="po">'+q.o.map((o,k)=>'<button data-act="ans" data-v="'+k+'">'+esc(unk?garble(o,k*11+7):o)+'</button>').join('')+'<button data-act="reread" class="sm">🔁 再讀一次</button></div>'}
+       +'<div class="po">'+q.o.map((o,k)=>'<button data-act="ans" data-v="'+k+'">'+esc(unk?garble(o,k*11+7):o)+'</button>').join('')+'<button data-act="reread" class="sm">👀 再看一次題目</button></div>'}
    el.innerHTML=head+body;bindHoldButtons(el);renderExq()},
-  bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。題目讀過的字會淡掉、有時會跳字跳行。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
+  bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
   async begin(){if(S().late){toast('（遲到了，比別人少寫五分鐘）');G.clock+=5}
    await say('監考老師','段考開始。今天考國文、英文、數學，考卷有正反兩面，寫完要檢查。');
    $('#lab').className='paper';$('#lab').style.display='block';this.renderPaper();
    const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(L)},
   act(a,v){const E=G.ex,b=G.brain;if(b.daydream>0){toast('（腦袋飄走了，看不清題目）');return}
-   if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;G.clock+=1;this.newQ(true);toast('🔁 從頭再讀一次');this.renderPaper();return}
+   if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;this.newQ(true);this.renderPaper();return}
    if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;const q=list[E.i],C=E.cur;
      let ok=+v===q.a;
      if(!ok&&C){const keySkip=C.U.some(u=>u.key&&u.skip),infoSkip=q.info!=null&&C.U.some(u=>u.line===q.info&&u.skip);if(keySkip||infoSkip)S().skipErr=(S().skipErr||0)+1}
