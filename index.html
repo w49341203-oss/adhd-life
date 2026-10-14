@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.8';
+const VERSION='v0.4.9';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -951,10 +951,15 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 /* ---------- 座位任務共用 ---------- */
 // ADHD 做事效率：就算有輔助，切換、重新開始、檢查還是比一般人多花力氣
 const ADHD_EFF=.88;
+const MED_RESP={
+  good:{name:'效果很好',mods:{drainMul:.45,focusPlus:12,restMul:.8},eff:1,wall:1.8,note:'這個角色對藥物反應很好：坐著做事幾乎能跟一般人一樣。'},
+  partial:{name:'部分有效',mods:{drainMul:.6,focusPlus:8,restMul:.85},eff:.88,wall:1.5,note:'這個角色對藥物部分有效：有明顯幫助，但還是比一般人吃力。'},
+  weak:{name:'效果不明顯',mods:{drainMul:.85,focusPlus:3,restMul:.95},eff:.88,wall:1.1,note:'這個角色對這種藥反應不明顯。現實中，醫師通常會調整劑量或換藥，也會搭配其他方法。'}};
+function medResp(){const sv=G.save;if(!sv.flags.medResp){const r=Math.random();sv.flags.medResp=r<.5?'good':r<.83?'partial':'weak'}return MED_RESP[sv.flags.medResp]||MED_RESP.partial}
 function seatWork(dt,rate){
   const b=G.brain;
   if(rate>0&&input.write&&b.daydream<=0){
-    const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp)*(b.typical?1:ADHD_EFF);
+    const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp)*(b.typical?1:(b.mods.eff||ADHD_EFF));
     G.prog=clamp(G.prog+rate*mul*dt,0,100);
     if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=ADHD_EFF*(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*dt,0,100);G.sprogUsed=true}
   }
@@ -1058,7 +1063,7 @@ const SUPPORTS=[
   {id:'talk',icon:'🗣️',name:'讓身邊的人了解',desc:'老師、主管或伴侶知道你的狀況：被罵時心情受傷減半。',},
 ];
 function sup(id){return !!(G.run&&G.run.supports&&G.run.supports.includes(id))}
-function brainCtx(){const mods={};(G.run.supports||[]).forEach(id=>{const s=SUPPORTS.find(x=>x.id===id);if(s&&s.mods)for(const k in s.mods){if(k==='capPlus'||k==='focusPlus')mods[k]=(mods[k]||0)+s.mods[k];else mods[k]=(mods[k]||1)*s.mods[k]}});
+function brainCtx(){const mods={};(G.run.supports||[]).forEach(id=>{let s=SUPPORTS.find(x=>x.id===id);if(s&&id==='med'){const mr=medResp();s={mods:mr.mods};mods.eff=mr.eff}if(s&&s.mods)for(const k in s.mods){if(k==='capPlus'||k==='focusPlus')mods[k]=(mods[k]||0)+s.mods[k];else mods[k]=(mods[k]||1)*s.mods[k]}});
   return{compScale:G.chapter.compScale,mods,stage:G.chapter.stage}}
 function chapterIndex(id){if(id==='done')return CHAPTERS.length;return CHAPTERS.findIndex(c=>c.id===id)}
 function diagnosedBefore(id){const d=G.save.flags.diagnosed;return !!d&&chapterIndex(d)>=0&&chapterIndex(d)<chapterIndex(id)}
@@ -1137,7 +1142,7 @@ function doFree(e){const f=FREE[e.free];if(!f)return;if(e.cd&&G.segT<e.cd){toast
 }
 
 /* ---------- 共用小工具 ---------- */
-function wallNeed(){const b=G.brain;return b.typical?.4:clamp(1.2+(65-b.dopa)/14,1,5.5)/(sup('med')?1.6:1)}
+function wallNeed(){const b=G.brain;return b.typical?.4:clamp(1.2+(65-b.dopa)/14,1,5.5)/(sup('med')?medResp().wall:1)}
 function wallWork(dt,rate){
   const b=G.brain,W=G.wall;
   if(b.shDopa!=null){const SW=G.swall||(G.swall={prog:0,started:false});
@@ -1545,7 +1550,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
      else{if(b.daydream>0&&G.wall.started){G.wall.started=false;G.wall.prog=0;refreshBar()}
        if(!G.wall.started){if(input.write&&b.daydream<=0){G.wall.prog+=dt;if(G.wall.prog>=wallNeed()){G.wall.started=true;Sound.good();refreshBar()}}else G.wall.prog=Math.max(0,G.wall.prog-dt*.8);
          const w=$('#wbar');if(w)w.style.width=clamp(G.wall.prog/wallNeed()*100,0,100)+'%'}
-       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*ADHD_EFF;t.p=clamp(t.p+(100/t.size)*mul*dt,0,100)}}
+       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(b.mods.eff||ADHD_EFF);t.p=clamp(t.p+(100/t.size)*mul*dt,0,100)}}
      const pb=$('#pbar');if(pb)pb.style.width=t.p+'%';
      if(t.p>=100){b.completeNote(k);Sound.good();toast('✅ '+t.label+' 完成');TK.cur=null;refreshBar()}}
    G.gt+=dt;
@@ -1825,6 +1830,7 @@ function finishChapter(){
     if(ml.length)ml.forEach(([t,a,c])=>rep.rows.push(['💊 '+t+'（有吃藥 → 沒吃藥估計）',a+'% → 約 '+c+'%','—']));
     else rep.cards.unshift('💊 <b>這一章的藥效：</b>這章大多是走來走去、記事情、控制情緒。藥物能幫上的有限——記事情和安排時間，還是要靠方法和習慣。')}
   const sp=G.run.supports||[];
+  const medCard=sp.includes('med')?`<div class="card">💊 <b>藥物反應：${medResp().name}。</b>${medResp().note}<br><small>研究上，仔細調整藥物的孩子中，大約一半症狀能降到一般範圍，也有不少人只改善一部分。症狀變少，也不代表成績、人際、時間管理會自動跟上。</small></div>`:'';
   const supCard=sp.length?`<div class="card">🧰 <b>這一章你用了：</b>${sp.map(id=>{const x=SUPPORTS.find(z=>z.id===id);return x?x.icon+' '+x.name:''}).join('、')}。<br>可以換不同的策略重玩這一章，比較看看差別。</div>`:'';
   const dxCard=newDx?`<div class="card">🩺 <b>你在${ch.name.split('　')[1]}（${ch.age}）確診了。</b>${nx?'下一章開始，你可以選擇輔助策略。':''}</div>`
     :sv.flags.diagnosed?'':`<div class="card">🔍 <b>你還沒確診。</b>${nx?'下一章，你還是得靠自己的力氣「跟上大家」。':''}</div>`;
@@ -1833,7 +1839,7 @@ function finishChapter(){
   const sumCard=`<div class="card">🔎 <b>今天最卡的地方：</b>${burd&&burd[0]>0?burd[1]:'沒有特別卡住'}。<br>🤝 <b>今天有幫上忙的：</b>${helps.length?[...new Set(helps)].join('、'):'這一章沒有用到任何支持——試試看用不同策略重玩，比較差別。'}</div>`;
   screen(`<div class="scr"><h2>${ch.name}・結束</h2>${sumCard}<p>你（ADHD）和「一般的你」的比較。<br><small style="color:var(--sub)">「一般的你」是教學用的對照分身：同樣的一天，大腦的管理系統沒有額外負擔時大概的樣子；不是一般人的平均分數。遊戲裡的數字都是簡化的平衡數值。</small></p>
   <table class="cmp"><tr><th>項目</th><th>你（ADHD）</th><th>一般的你</th></tr>${rep.rows.map(r=>`<tr class="${r[3]?'star':''}"><td>${r[0]}</td><td class="me">${r[1]}</td><td class="gh">${r[2]}</td></tr>`).join('')}</table>
-  ${dxCard}${supCard}<div class="card">🧠 <b>IQ：</b>${iqText(ch.stage,sv.iq)}</div><div class="card">👤 <b>性別：</b>${genderText(ch.stage,sv.gender,s,b)}</div>
+  ${dxCard}${medCard}${supCard}<div class="card">🧠 <b>IQ：</b>${iqText(ch.stage,sv.iq)}</div><div class="card">👤 <b>性別：</b>${genderText(ch.stage,sv.gender,s,b)}</div>
   <h3>大腦小卡</h3>${rep.cards.filter(Boolean).map(c=>`<div class="card">${c}</div>`).join('')}
   ${nx?`<button class="mbtn pri" id="toNext">繼續：${nx.icon} ${nx.name}（${nx.age}）</button>`:`<button class="mbtn pri" id="toRecap">🌅 人生回顧</button>`}
   <button class="mbtn" id="toLife">回到人生地圖</button>
@@ -1925,7 +1931,7 @@ function lifeMap(){
     const st=done?'✅ 完成（可重玩）':open?(sv.run&&sv.run.chapter===c.id?'▶ 繼續':'▶ 開始'):'🔒';
     return `<div class="lnode ${done?'done ':''}${open?'open':'lock'}" data-id="${c.id}"><div class="i">${c.icon}</div><b>${c.name}</b><div class="a">${c.age}</div><div style="font-size:12px;margin-top:4px">${st}</div></div>`}).join('<div style="align-self:center;color:var(--sub)">→</div>');
   const dxc=sv.flags.diagnosed?CHAPTERS.find(c=>c.id===sv.flags.diagnosed):null;
-  const dx=dxc?'🩺 已確診（'+dxc.name+'・'+dxc.age+'）':'🔍 尚未確診';
+  const dx=(dxc?'🩺 已確診（'+dxc.name+'・'+dxc.age+'）':'🔍 尚未確診')+(sv.flags.medResp?'・💊 藥物反應：'+MED_RESP[sv.flags.medResp].name:'');
   const sty='外顯程度 '+Math.round(sv.outward*100)+'%，'+(sv.outward>=.6?'比較外顯':sv.outward<=.4?'比較內隱':'介於兩者之間');
   screen(`<div class="scr"><h2>${esc(sv.name)} 的人生地圖</h2><p>${sv.gender==='M'?'男':'女'}・IQ ${sv.iq}・ADHD 混合型（${sty}）・${dx}</p>
    <div class="life">${nodes}</div>
@@ -2209,7 +2215,7 @@ function updateBrainUI(dt){
   renderMeters($('#metersMe'),b);
   const med=sup('med');$('#colMe .ctitle').textContent='你（ADHD）'+(med?'　💊 藥效中':'');
   const mm=$('#medMe');mm.style.display=med?'block':'none';
-  if(med)mm.textContent='💊 藥效中：專注底子 +8、動力掉得慢四成、「開始的牆」變輕。'+(b.shDopa!=null?'（沒吃藥的話，現在動力約 '+Math.round(b.shDopa)+'、專注約 '+Math.round(b.shFocus)+'）':'')+'念頭還是會冒，記事的習慣也還是要自己練。';
+  if(med)mm.textContent='💊 藥效中（藥物反應：'+medResp().name+'）。'+(b.shDopa!=null?'（沒吃藥的話，現在動力約 '+Math.round(b.shDopa)+'、專注約 '+Math.round(b.shFocus)+'）':'')+'念頭還是會冒，記事的習慣也還是要自己練。';
   if(G.compare){renderNotes($('#notesGh'),g,true);$('#capGh').textContent='格數 '+g.memCap;renderMeters($('#metersGh'),g);
     $('#gcount').textContent='今天冒出 '+g.tCount+' 個念頭，被拉走 '+((G.run&&G.run.gs.hijacks)||0)+' 次（很快就回神）。\n（你：冒出 '+b.tCount+' 個，被拉走 '+((G.run&&G.run.stats.hijacks)||0)+' 次）';
     $('#gprog').textContent=G.seg&&G.seg.kind==='seat'&&G.seg.boring?'任務進度 '+Math.round(G.gprog)+'%':''}
