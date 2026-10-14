@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.5.1';
+const VERSION='v0.5.2';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -430,11 +430,11 @@ function buildSchool(){
   for(const r of DESK_ROWS)for(const cx of DESK_COLS){setO(m,cx,r,'d');setO(m,cx+1,r,'d');setO(m,cx,r+1,'c');setO(m,cx+1,r+1,'c')}
   for(let x=2;x<=15;x++)setO(m,x,11,'L');
   room(m,0,12,40,5,',');
-  setB(m,17,12,'D');setB(m,17,13,'D');setB(m,28,12,'D');setB(m,28,13,'D');setB(m,30,16,'D');
+  setB(m,17,12,'D');setB(m,17,13,'D');setB(m,16,12,'D');setB(m,16,13,'D');setB(m,28,12,'D');setB(m,28,13,'D');setB(m,27,12,'D');setB(m,27,13,'D');setB(m,30,16,'D');setB(m,29,16,'D');
   [6,12,22,34].forEach(x=>setB(m,x,13,'w'));
   setO(m,24,14,'F');setO(m,38,14,'p');
   room(m,0,16,9,9,',');
-  setB(m,4,16,'D');setB(m,4,17,'D');
+  setB(m,4,16,'D');setB(m,4,17,'D');setB(m,3,16,'D');setB(m,3,17,'D');
   setO(m,1,18,'S');setO(m,2,18,'S');setO(m,5,18,'O');setO(m,6,18,'O');setO(m,7,18,'O');
   for(let y=17;y<25;y++)setB(m,30,y,'P');
   for(let x=0;x<39;x++)setO(m,x,25,'x');
@@ -2147,7 +2147,12 @@ function step(dt){
 function moveActor(a,dx,dy,dt,sp){
   const l=Math.hypot(dx,dy);if(!l){a.moving=false;return}dx/=l;dy/=l;
   const nx=a.x+dx*sp*dt,ny=a.y+dy*sp*dt;
-  if(!collide(nx,a.y))a.x=nx;if(!collide(a.x,ny))a.y=ny;
+  const bx=collide(nx,a.y),by=collide(a.x,ny);
+  if(!bx)a.x=nx;if(!by)a.y=ny;
+  // 卡在門框邊：自動往旁邊滑，對準開口（最多滑 10 像素）
+  const slide=sp*dt;
+  if(by&&Math.abs(dy)>.5)for(const o of [2,4,6,8,10]){if(!collide(a.x+o,ny)){a.x+=Math.min(o,slide);break}if(!collide(a.x-o,ny)){a.x-=Math.min(o,slide);break}}
+  if(bx&&Math.abs(dx)>.5)for(const o of [2,4,6,8,10]){if(!collide(nx,a.y+o)){a.y+=Math.min(o,slide);break}if(!collide(nx,a.y-o)){a.y-=Math.min(o,slide);break}}
   a.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');a.moving=true;a.anim=(a.anim||0)+dt*8;
 }
 function collide(x,y){return [[x-4,y-4],[x+4,y-4],[x-4,y],[x+4,y]].some(([px,py])=>solidAt(G.map,Math.floor(px/T),Math.floor(py/T)))}
