@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.5.2';
+const VERSION='v0.5.3';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1200,19 +1200,25 @@ function baseStats(){return{scold:0,hijacks:0,lost:0,masked:0,peeks:0,overflow:0
 
 /* ================= 第二章 中學 ================= */
 const EXAM_F=[
-  {q:'apple 的意思是？',o:['蘋果','香蕉','鳳梨'],a:0,k:1},
-  {t:['下列哪一個字','「不是」','動物？'],key:1,o:['cat','dog','desk'],a:2},
-  {q:'They ___ playing.',o:['is','are','am'],a:1,k:1},
-  {lines:['Tom has a cat.','The cat is black.',"Tom's sister has a dog."],info:1,q:"What color is Tom's cat?",o:['black','white','brown'],a:0},
-  {q:'yesterday 的意思是？',o:['明天','昨天','今天'],a:1,k:1},
-  {t:['下列哪一個句子','「沒有」','寫錯？'],key:1,o:['He go to school.','She goes to school.','They goes to school.'],a:1},
+  {sub:'國文',q:'「畫蛇添足」是比喻什麼？',o:['多此一舉','做事很快','很會畫畫'],a:0,k:1},
+  {sub:'國文',t:['下列哪一個詞語','「不是」','形容快樂？'],key:1,o:['興高采烈','眉開眼笑','垂頭喪氣'],a:2},
+  {sub:'國文',q:'「三人行，必有我師焉」出自哪一本書？',o:['論語','孟子','詩經'],a:0,k:1},
+  {sub:'英文',q:'apple 的意思是？',o:['蘋果','香蕉','鳳梨'],a:0,k:1},
+  {sub:'英文',t:['下列哪一個字','「不是」','動物？'],key:1,o:['cat','dog','desk'],a:2},
+  {sub:'英文',q:'They ___ playing.',o:['is','are','am'],a:1,k:1},
+  {sub:'數學',q:'12 × 3 = ？',o:['36','32','39'],a:0,k:1},
+  {sub:'數學',t:['下列哪一個數','「不是」','偶數？'],key:1,o:['4','7','10'],a:1},
+  {sub:'數學',q:'正方形邊長 5 公分，周長是幾公分？',o:['20','25','10'],a:0,k:1},
 ];
 const EXAM_B=[
-  {q:'「星期五」的英文是？',o:['Monday','Friday','Sunday'],a:1,k:1},
-  {lines:['Amy gets up at six.','She eats breakfast at seven.','She goes to school at eight.'],info:1,q:'When does Amy eat breakfast?',o:['six','seven','eight'],a:1},
-  {q:'How ___ you?',o:['is','am','are'],a:2,k:1},
+  {sub:'國文',lines:['小明早上七點起床。','他吃完早餐後，去公園跑步。','跑完步，他回家寫作業。'],info:1,q:'小明吃完早餐後做什麼？',o:['寫作業','去公園跑步','睡覺'],a:1},
+  {sub:'英文',lines:['Tom has a cat.','The cat is black.',"Tom's sister has a dog."],info:1,q:"What color is Tom's cat?",o:['black','white','brown'],a:0},
+  {sub:'數學',lines:['小華有 10 顆糖。','他給了弟弟 3 顆。','媽媽又給他 5 顆。'],info:1,q:'小華現在有幾顆糖？',o:['12','15','8'],a:0},
 ];
-function garble(str,seed){const G_='#%&@?*~▯ӂʘ';let o='';for(let i=0;i<str.length;i++){const c=str[i];o+=/[A-Za-z]/.test(c)?G_[(c.charCodeAt(0)*7+i*13+seed)%G_.length]:c}return o}
+const EXAM_N=()=>EXAM_F.length+EXAM_B.length;
+function garble(str,seed){const G_='#%&@?*~▯ӂʘ',CJ='亍丌乜乂亓卅屮彡夂夊丩丬丶乚',DG='＃％＆？＊';let o='';
+  for(let i=0;i<str.length;i++){const c=str[i],h=c.charCodeAt(0)*7+i*13+seed;
+    o+=/[A-Za-z]/.test(c)?G_[h%G_.length]:/[\u4e00-\u9fff]/.test(c)?CJ[h%CJ.length]:/[0-9]/.test(c)?DG[h%DG.length]:c}return o}
 function examSkipP(){const b=G.brain;return clamp(.04+(60-b.focus)/250,0,.25)}
 function buildQ(q,careful,unk){
   const U=[];const words=t=>/\s/.test(t)?t.split(' ').map(w=>w+' '):[t];
@@ -1234,7 +1240,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  reflect:async()=>{await say('旁白','你每週去一次諮商，也跟導師說明了你的狀況。\n困難還在，但你不再覺得自己是「壞孩子」。')},
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時搭上公車',yes(!s.late),yes(true)],
-   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ、有沒有複習有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
+   ['段考（國文／英文／數學）',s.exam+' 分'+(s.examSub?'（國 '+(s.examSub['國文']??'—')+'／英 '+(s.examSub['英文']??'—')+'／數 '+(s.examSub['數學']??'—')+'）':''),g.exam+' 分'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ、有沒有複習有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
    ['被嘲笑時忍住了',s.held===null?'—':yes(s.held),yes(true)],['下課準時回座',yes(!s.backLate),yes(true)],
    ['⭐ 大隊接力跑出',s.relay+' 公尺',g.relay+' 公尺',true],['搶跑',s.falseStart+' 次','0 次'],
    ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
@@ -1264,8 +1270,8 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   finish(){S().items=['notes','pe','bento','card'].filter(k=>G.run.bag[k]).length},
   bot(){for(const id of ['pe','notes','card','bento'])if(botGo(id))return;botGo('door')},
  },
- {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
-  card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
+ {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:100,boring:true,dist:1,title:'段考',
+  card:'段考：國文、英文、數學。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
   setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=G.run.bag.notes?base*.3:clamp(base+.12,0,.65);
    // 每題同一個隨機數：一般的你記不起來的字，ADHD 的你也一定記不起來（同一個人）
    const draws={front:EXAM_F.map(()=>Math.random()),back:EXAM_B.map(()=>Math.random())};
@@ -1274,7 +1280,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    G.ex.gunk={front:EXAM_F.map((q,i)=>!!q.k&&draws.front[i]<base*.3),back:EXAM_B.map((q,i)=>!!q.k&&draws.back[i]<base*.3)}},
   newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
   renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
-   const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
+   const head=`<div class="ph"><span>📄 段考　${E.i<list.length?list[E.i].sub+'　':''}${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
    let body;
    if(E.submitted)body='<div style="font-size:20px;font-weight:800;text-align:center;padding:20px">交卷了。等鐘響……</div>';
    else if(E.i>=list.length)body=E.side==='front'
@@ -1286,19 +1292,19 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    el.innerHTML=head+body;bindHoldButtons(el);renderExq()},
   bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。題目讀過的字會淡掉、有時會跳字跳行。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
   async begin(){if(S().late){toast('（遲到了，比別人少寫五分鐘）');G.clock+=5}
-   await say('監考老師','英文段考開始。考卷有正反兩面，寫完要檢查。');
+   await say('監考老師','段考開始。今天考國文、英文、數學，考卷有正反兩面，寫完要檢查。');
    $('#lab').className='paper';$('#lab').style.display='block';this.renderPaper();
    const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(L)},
   act(a,v){const E=G.ex,b=G.brain;if(b.daydream>0){toast('（腦袋飄走了，看不清題目）');return}
    if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;G.clock+=1;this.newQ(true);toast('🔁 從頭再讀一次');this.renderPaper();return}
    if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;const q=list[E.i],C=E.cur;
      let ok=+v===q.a;
-     if(ok&&b.focus<45&&Math.random()<.25){ok=false;S().careless++}
      if(!ok&&C){const keySkip=C.U.some(u=>u.key&&u.skip),infoSkip=q.info!=null&&C.U.some(u=>u.line===q.info&&u.skip);if(keySkip||infoSkip)S().skipErr=(S().skipErr||0)+1}
      if((E.side==='front'?E.unk.front:E.unk.back)[E.i])S().unknown=(S().unknown||0)+1;
      (E.side==='front'?E.front:E.back).push(ok);E.i++;this.newQ()}
    if(a==='flip'){E.side='back';E.i=0;S().flipped=true;b.completeNote('flip');toast('↻ 背面還有三題！');this.newQ()}
-   if(a==='submit'){E.submitted=true;G.fast=true;b.completeNote('check')}
+   if(a==='submit'){E.submitted=true;G.fast=true;b.completeNote('check');
+     if(E.side==='front'){S().flipped=false;setTimeout(()=>say('你（內心）','（交卷了……收考卷時，你看到同學的考卷翻過來——背面還有 '+EXAM_B.length+' 題！你完全沒發現。）'),50)}}
    refreshBar();renderExq()},
   tick(dt){seatWork(dt,0);const C=G.ex&&G.ex.cur,b=G.brain;
    if(C&&b.daydream<=0&&C.cursor<C.U.length){C.t+=dt;
@@ -1308,8 +1314,10 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    renderExq()},
   onOverflow(){scold('監考老師','{name}，考試中不要一直動來動去、東張西望！')},
   finish(){$('#lab').style.display='none';$('#lab').className='';const E=G.ex;
-   let gc=0;[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{const mine=E[sd][i];if(!E.gunk[sd][i])gc++;else if(mine===true)gc++;else if(mine==null&&Math.random()<1/3)gc++}));GS().exam=Math.round(gc/9*100);
-   S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
+   let gc=0;[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{const mine=E[sd][i];if(!E.gunk[sd][i])gc++;else if(mine===true)gc++;else if(mine==null&&Math.random()<1/3)gc++}));GS().exam=Math.round(gc/EXAM_N()*100);
+   const sub={};[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{const o=sub[q.sub]||(sub[q.sub]={c:0,n:0});o.n++;if(E[sd][i]===true)o.c++}));
+   S().examSub=Object.fromEntries(Object.entries(sub).map(([k,v])=>[k,Math.round(v.c/v.n*100)]));
+   S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/EXAM_N()*100)},
   bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length){if(E.cur&&E.cur.cursor<E.cur.U.length)return;return this.act('ans',String(list[E.i].a))}if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
  },
  {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
@@ -1383,7 +1391,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   async begin(){const s=S(),b=G.brain,O=G.save.outward;
    if(s.hw<100)await say('媽媽','作業又沒寫完？你整個晚上到底在幹嘛？');
    if(s.phoneMin>=30)await say('你（內心）','（今天光是「看一下手機」，就不見了 '+s.phoneMin+' 分鐘。你真的只是想看一下而已。）');
-   if(s.exam<70)await say('你（內心）','（英文段考 '+s.exam+' 分。明明都會的……）');
+   if(s.exam<70)await say('你（內心）','（段考 '+s.exam+' 分。明明都會的……）');
    await diagnosisEvent(async()=>{
      const notice=s.scold*1.2+(s.conflict?3:0)+(s.exam<70?2:0)+O*3-b.comp*2;
      if(b.anx>=35&&notice<8){
