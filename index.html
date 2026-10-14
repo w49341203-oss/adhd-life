@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.2';
+const VERSION='v0.4.3';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1201,7 +1201,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  reflect:async()=>{await say('旁白','你每週去一次諮商，也跟導師說明了你的狀況。\n困難還在，但你不再覺得自己是「壞孩子」。')},
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時搭上公車',yes(!s.late),yes(true)],
-   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['沒學會只能猜（跟 IQ 有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
+   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ 有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
    ['被嘲笑時忍住了',s.held===null?'—':yes(s.held),yes(true)],['下課準時回座',yes(!s.backLate),yes(true)],
    ['⭐ 大隊接力跑出',s.relay+' 公尺',g.relay+' 公尺',true],['搶跑',s.falseStart+' 次','0 次'],
    ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
@@ -1246,7 +1246,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
      ?'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button><button data-act="flip" class="sm" style="opacity:.6">↻</button></div>'
      :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">背面也寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button></div>';
    else{const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
-     body='<div id="exq"></div>'+(unk?'<div class="unk">（這題好像沒學會……字看起來像亂碼，只能用猜的）</div>':'')
+     body='<div id="exq"></div>'+(unk?'<div class="unk">（這幾個單字沒記起來……看起來像亂碼，只能用猜的。不管有沒有 ADHD，沒記住就是看不懂。）</div>':'')
        +'<div class="po">'+q.o.map((o,k)=>'<button data-act="ans" data-v="'+k+'">'+esc(unk?garble(o,k*11+7):o)+'</button>').join('')+'<button data-act="reread" class="sm">🔁 再讀一次</button></div>'}
    el.innerHTML=head+body;bindHoldButtons(el);renderExq()},
   bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。題目讀過的字會淡掉、有時會跳字跳行。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
