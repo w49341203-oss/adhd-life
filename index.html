@@ -213,6 +213,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
         <div class="notes" id="notesMe"></div>
         <div id="writtenMe"></div>
         <div id="metersMe"></div>
+        <div id="medMe" style="display:none;font-size:12px;color:#ffd66b;margin-top:4px;line-height:1.5"></div>
         <div class="inner" id="innerMe"></div>
       </section>
       <section class="bcol ghost" id="colGh" style="display:none">
@@ -230,7 +231,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3.3';
+const VERSION='v0.3.4';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -488,6 +489,13 @@ class Brain{
     if(c.walking)dd+=A?1.5:.3;if(c.fidget)dd+=A?1.2:.2;
     if(!c.working&&!c.interesting)dd+=(50-this.dopa)*.04;
     this.dopa=clamp(this.dopa+dd*dt,0,100);
+    if(A&&(this.mods.drainMul||this.mods.focusPlus)){
+      if(this.shDopa==null){this.shDopa=this.dopa;this.shFocus=this.focus}
+      let sd=0;if(c.interesting)sd+=6;else if(c.working&&c.boring)sd-=1.6;if(c.walking)sd+=1.5;if(c.fidget)sd+=1.2;if(!c.working&&!c.interesting)sd+=(50-this.shDopa)*.04;
+      this.shDopa=clamp(this.shDopa+sd*dt,0,100);
+      const st=this.hyper?100:clamp(30+this.shDopa*.5+this.comp*8-(this.rest>70?10:0),15,92);
+      this.shFocus=clamp(this.shFocus+(st-this.shFocus)*Math.min(1,dt*.8),0,100);
+    }
     let target=this.typical?85:clamp(30+this.dopa*.5+this.comp*8+(this.mods.focusPlus||0)-(this.rest>70?10:0),15,92);
     if(this.hyper)target=100;
     this.focus=clamp(this.focus+(target-this.focus)*Math.min(1,dt*.8),0,100);
@@ -580,7 +588,7 @@ function thoughtSource(brain){
 function onBrain(type,d){
   const b=G.brain;
   if(type==='hijack'){
-    S().hijacks++;b.focus=clamp(b.focus-20,0,100);
+    S().hijacks++;b.focus=clamp(b.focus-20,0,100);if(b.shFocus!=null)b.shFocus=clamp(b.shFocus-20,0,100);
     const live=b.notes.filter(n=>!n.done);if(live.length){const n=pick(live);n.life-=.3}
     if(d.kind==='body')b.rest=clamp(b.rest+25,0,100);
     if(d.kind==='self'){b.anx=clamp(b.anx+10,0,100);b.mood=clamp(b.mood-3,0,100)}
@@ -892,10 +900,11 @@ function seatWork(dt,rate){
   if(rate>0&&input.write&&b.daydream<=0){
     const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp);
     G.prog=clamp(G.prog+rate*mul*dt,0,100);
+    if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*dt,0,100);G.sprogUsed=true}
   }
   const pb=$('#pbar');if(pb&&rate>0){pb.style.width=G.prog+'%';$('#plbl').textContent='完成 '+Math.round(G.prog)+'%'+(G.compare?'　｜　一般的你 '+Math.round(G.gprog)+'%':'')}
 }
-function ghostWork(dt,rate){G.gprog=clamp(G.gprog+rate*.97*dt,0,100)}
+function ghostWork(){const sg=G.seg;if(!sg)return;const t0=hm(sg.t0),t1=hm(sg.t1);G.gprog=clamp((G.clock-t0)/((t1-t0)*.85)*100,0,100)}
 function addLabPt(){
   const lab=$('#lab'),el=document.createElement('div');el.className='pt';el.textContent='🔍';
   const p={t:G.brain.hyper?3:2.2,el};el.style.left=rand(12,88)+'%';el.style.top=rand(18,85)+'%';
@@ -1026,6 +1035,9 @@ function hookWritten(){
 function wallNeed(){const b=G.brain;return b.typical?.4:clamp(1.2+(65-b.dopa)/14,1,5.5)/(sup('med')?1.6:1)}
 function wallWork(dt,rate){
   const b=G.brain,W=G.wall;
+  if(b.shDopa!=null){const SW=G.swall||(G.swall={prog:0,started:false});
+    if(b.daydream>0){SW.started=false;SW.prog=0}
+    if(!SW.started&&input.write&&b.daydream<=0){SW.prog+=dt;if(SW.prog>=clamp(1.2+(65-b.shDopa)/14,1,5.5))SW.started=true}}
   if(b.daydream>0&&W.started){W.started=false;W.prog=0;toast('（被打斷了……又要重新開始）');refreshBar()}
   if(!W.started){
     if(input.write&&b.daydream<=0){W.prog+=dt;if(W.prog>=wallNeed()){W.started=true;Sound.good();refreshBar()}}
@@ -1057,7 +1069,7 @@ function baseStats(){return{scold:0,hijacks:0,lost:0,masked:0,peeks:0,overflow:0
 const EXAM_F=[['apple 的意思是？',['蘋果','香蕉','鳳梨'],0],['I ___ a student.',['am','is','are'],0],['「圖書館」的英文是？',['library','kitchen','hospital'],0],['They ___ playing.',['is','are','am'],1],['yesterday 的意思是？',['明天','昨天','今天'],1],['She ___ to school every day.',['go','goes','going'],1]];
 const EXAM_B=[['「星期五」的英文是？',['Monday','Friday','Sunday'],1],['How ___ you?',['is','am','are'],2],['cat 的複數是？',['cats','cates','caties'],0]];
 const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compScale:.8,pools:POOL_TEEN,
- init:()=>({stats:{items:0,late:false,exam:0,careless:0,flipped:false,held:null,conflict:false,gave:false,toilet:false,backLate:false,relay:0,falseStart:0,hw:0},gs:{items:4,exam:89,relay:106,hw:100}}),
+ init:()=>({stats:{items:0,late:false,exam:0,careless:0,flipped:false,held:null,conflict:false,gave:false,toilet:false,backLate:false,relay:0,falseStart:0,hw:0},gs:{items:4,exam:100,relay:106,hw:100}}),
  reflect:async()=>{await say('旁白','你每週去一次諮商，也跟導師說明了你的狀況。\n困難還在，但你不再覺得自己是「壞孩子」。')},
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時搭上公車',yes(!s.late),yes(true)],
@@ -1306,7 +1318,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    ['準時進會議室',yes(!s.lateMeet),yes(true)],['記得打卡',yes(s.punched),yes(true)],['開會專心聽',s.listen+'%',g.listen+'%'],
    ['⭐ 想出好點子',s.idea||s.interrupt?'💡 有':'—','—',true],['打斷主管',s.interrupt?'1 次':'0 次','0 次'],
    ['三點前回客戶 email',yes(s.email),yes(true)],['報價單',yes(s.quote),yes(true)],['訂會議室',yes(s.room),yes(true)],
-   ['⭐ 簡報完成度',s.slides+'%',g.slides+'%',true],['被批評時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],
+   ['簡報完成度',s.slides+'%','100%'],['⭐ 主管誇簡報有創意',yes(s.slides>=100),'—',true],['被批評時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],
    ['下班帶走鑰匙',yes(s.keys),yes(true)],['衝動購物',s.spent?'NT$'+s.spent.toLocaleString():'NT$0','NT$0'],['被訊息吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
   cards:[
    '👻 <b>看不見的任務</b><br>今天有些工作，從你的任務板上「消失」了——因為便利貼掉了。對 ADHD 來說，「眼睛看不到」幾乎等於「不存在」。把任務寫在看得到的地方，不是囉嗦，是必需品。',
@@ -1378,7 +1390,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    G.gt+=dt;
    if(!this.asked&&G.segT>45){this.asked=true;
      say('同事小陳','{name}～可以幫我看一下這個表格嗎？很快啦！',{choices:['好啊','我等一下再幫你']}).then(i=>{if(i===0){S().helped=true;G.clock+=40;G.brain.mood=clamp(G.brain.mood+3,0,100);toast('（「很快」花了 40 分鐘）')}else{G.brain.addNotes([{key:'help',text:'等一下幫小陳看表格'}])}})}},
-  finish(){const TK=G.tasks;S().email=TK.email.p>=100;S().quote=TK.quote.p>=100;S().room=TK.room.p>=100;S().slides=Math.round(TK.slides.p);GS().slides=80},
+  finish(){const TK=G.tasks;S().email=TK.email.p>=100;S().quote=TK.quote.p>=100;S().room=TK.room.p>=100;S().slides=Math.round(TK.slides.p);GS().slides=100},
   bot(){const TK=G.tasks;if(!TK.cur){const k=['email','quote','room','slides'].find(k=>this.vis(k)&&TK[k].p<100);if(k)this.act('pick',k)}input.write=true;input.fidget=G.brain.rest>40},
  },
  {id:'talk',map:'office',kind:'scene',t0:'15:00',t1:'15:00',real:0,title:'主管找你',
@@ -1586,7 +1598,9 @@ function beginSeg(i){
   renderWritten();
   G.brain.thoughts=[];G.gb.thoughts=[];G.brain.daydream=0;G.brain.hyper=false;G.brain.rest=Math.min(G.brain.rest,30);
   // 換時段＝休息過：動力與專注部分回復（不完全回滿）
-  for(const bb of [G.brain,G.gb]){const base=bb.typical?70:55;bb.dopa=Math.max(bb.dopa,lerp(bb.dopa,base,.8));bb.focus=Math.max(bb.focus,bb.typical?85:60)}
+  for(const bb of [G.brain,G.gb]){const base=bb.typical?70:55;bb.dopa=Math.max(bb.dopa,lerp(bb.dopa,base,.8));bb.focus=Math.max(bb.focus,bb.typical?85:60);
+    if(bb.shDopa!=null){bb.shDopa=Math.max(bb.shDopa,lerp(bb.shDopa,55,.8));bb.shFocus=Math.max(bb.shFocus,60)}}
+  G.sprog=0;G.swall=null;G.sprogUsed=false;
   $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());
   seg.setup();
   G.ents.forEach(e=>{e.px=tc(e.tx);e.py=e.onDesk?e.ty*T+6:tf(e.ty)-4});
@@ -1600,6 +1614,7 @@ async function endSeg(){
   if(ending||!G.running)return;ending=true;
   try{
     G.running=false;input.write=input.fidget=input.hold=false;
+    if(G.sprogUsed&&sup('med'))(G.run.medLog||(G.run.medLog=[])).push([G.seg.title,Math.round(G.prog),Math.round(G.sprog)]);
     const seg=G.seg;if(seg.finish)await seg.finish();
     $('#seatbar').style.display='none';$('#lab').style.display='none';$('#qte').style.display='none';$('#daydream').style.display='none';
     // ghost 帶的東西
@@ -1640,6 +1655,9 @@ function finishChapter(){
   if(chapterIndex(nextId)>chapterIndex(sv.chapter))sv.chapter=nextId;
   sv.run=null;sv.seg=0;Save.store(G.slot,sv);
   const rep=ch.report(s,g,b,f);
+  if(sup('med')){const ml=G.run.medLog||[];
+    if(ml.length)ml.forEach(([t,a,c])=>rep.rows.push(['💊 '+t+'（有吃藥 → 沒吃藥估計）',a+'% → 約 '+c+'%','—']));
+    else rep.cards.unshift('💊 <b>這一章的藥效：</b>這章大多是走來走去、記事情、控制情緒。藥物能幫上的有限——記事情和安排時間，還是要靠方法和習慣。')}
   const sp=G.run.supports||[];
   const supCard=sp.length?`<div class="card">🧰 <b>這一章你用了：</b>${sp.map(id=>{const x=SUPPORTS.find(z=>z.id===id);return x?x.icon+' '+x.name:''}).join('、')}。<br>可以換不同的策略重玩這一章，比較看看差別。</div>`:'';
   const dxCard=newDx?`<div class="card">🩺 <b>你在${ch.name.split('　')[1]}（${ch.age}）確診了。</b>${nx?'下一章開始，你可以選擇輔助策略。':''}</div>`
@@ -2005,6 +2023,9 @@ function updateBrainUI(dt){
   $('#bpInfo').textContent=`ADHD 混合型・${G.save.gender==='M'?'男':'女'}・IQ ${G.save.iq}`;
   renderNotes($('#notesMe'),b,false);$('#capMe').textContent='格數 '+b.memCap;
   renderMeters($('#metersMe'),b);
+  const med=sup('med');$('#colMe .ctitle').textContent='你（ADHD）'+(med?'　💊 藥效中':'');
+  const mm=$('#medMe');mm.style.display=med?'block':'none';
+  if(med)mm.textContent='💊 藥效中：專注底子 +12、動力掉得慢一半、「開始的牆」變輕。'+(b.shDopa!=null?'（沒吃藥的話，現在動力約 '+Math.round(b.shDopa)+'、專注約 '+Math.round(b.shFocus)+'）':'')+'念頭還是會冒，記事的習慣也還是要自己練。';
   if(G.compare){renderNotes($('#notesGh'),g,true);$('#capGh').textContent='格數 '+g.memCap;renderMeters($('#metersGh'),g);
     $('#gcount').textContent='今天冒出 '+g.tCount+' 個念頭，都自己消失了。\n（你：'+b.tCount+' 個）';
     $('#gprog').textContent=G.seg&&G.seg.kind==='seat'&&G.seg.boring?'任務進度 '+Math.round(G.gprog)+'%':''}
