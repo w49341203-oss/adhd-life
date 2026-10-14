@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.0';
+const VERSION='v0.6.1';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1464,10 +1464,10 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
    ['按了幾次貪睡',s.snooze+' 次','0 次'],['帶齊東西',s.items+' / 4','4 / 4'],['準時出門',yes(!s.late),yes(true)],
    ['上課筆記',s.notes+'%',g.notes+'%'],['兩點前寄出分組名單',yes(s.emailSent&&!s.emailLate),yes(true)],
    ['下午寫的報告',s.mid+'%',g.mid+'%'],['被遊戲吃掉的時間',s.gameMin+' 分鐘','0 分鐘'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],
-   ['⭐ 截止前一晚衝刺',(s.report-s.mid)+'%','不需要',true],['報告最後完成',s.report+'%',g.report+'%'],['寫完的時間',s.sleep||'—','下午就寫完了'],...commonRows(s,b,g)],
+   ['截止前一晚',({sprint:'⚡ 衝刺',slow:'🐢 卡了一陣才開始',freeze:'🧊 卡住了',done:'早就寫完'}[s.sprintState]||'—')+'（多寫了 '+Math.max(0,s.report-s.mid)+'%）','不需要',s.sprintState==='sprint'],['報告最後完成',s.report+'%',g.report+'%'],['寫完的時間',s.sleep||'—','下午就寫完了'],...commonRows(s,b,g)],
   cards:[
    '🧱 <b>拖延不是懶</b><br><b>遊戲裡：</b>無聊的事要先推開一道「開始的牆」。<br><b>現實中：</b>很多 ADHD 的人描述「知道要做，卻怎樣都開始不了」。把任務切小、先做 5 分鐘，通常比較容易開始。',
-   '⚡ <b>為什麼截止前反而做得完？</b><br><b>遊戲裡：</b>截止前一晚，大腦突然進入超專注。<br><b>現實中：</b>不少 ADHD 的人說要「火燒屁股」才進入狀態。這招有時有效，但很傷身體，也很容易失手。']}},
+   '⚡ <b>截止前，有人衝刺、有人卡住</b><br><b>遊戲裡：</b>截止前一晚的結果，看你當下的心情、焦慮、精神力，以及還剩多少沒寫。<br><b>現實中：</b>壓力適中時，急迫感可能讓人進入狀態；但焦慮太高、任務太大、太累或一直失敗，反而會讓人「當機」動不了。同一個人這次衝刺成功，下次也可能卡住。']}},
  segs:[
  {id:'dorm',map:'dorm',kind:'roam',t0:'08:00',t1:'08:40',real:95,dist:1,phone:true,phoneJump:10,title:'宿舍的早上',
   card:'九點十分的課。已經沒有人會叫你起床了。',pool:['今天穿什麼？','早餐要吃什麼？','室友昨天幾點睡的？'],
@@ -1523,16 +1523,31 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
  },
  {id:'sprint',map:'dorm',kind:'seat',t0:'23:00',t1:'27:00',real:60,dist:.8,keepNotes:true,title:'截止前一晚',
   card:'星期天深夜。報告明天早上九點要交。',
-  setup(){sitPlayer(8,3);G.npcs=[];G.ents=[];G.prog=G.run.flags.report||0;G.gprog=100;this.done=false},
-  isInteresting(){return G.prog<100},
-  bar(){return `<div class="lbl">⚡ 截止前的急迫感……大腦突然醒過來了！</div><div class="row"><button class="big" data-hold="write">✍️ 寫報告（按住）</button></div><div class="prog"><i id="pbar"></i></div><div class="proglbl" id="plbl"></div>`},
+  setup(){sitPlayer(8,3);G.npcs=[];G.ents=[];G.prog=G.run.flags.report||0;G.gprog=100;this.done=false;G.wall={started:false,prog:0};
+   const b=G.brain,left=100-G.prog;
+   const risk=(b.anx>=45?1:0)+(b.mood<40?1:0)+(left>=60?1:0)+(b.energy<35?1:0)-(sup('med')?1:0)-(KIND()?1:0);
+   this.state=G.prog>=100?'done':risk>=3?'freeze':risk===2||(risk===1&&Math.random()<.5)?'slow':'sprint';
+   this.special=this.state==='freeze'?{p:.55,kind:'self',texts:['我一定寫不完','又搞砸了……','為什麼我每次都這樣','乾脆不要交了','別人早就寫完了']}:null},
+  isInteresting(){if(G.prog>=100)return false;if(this.state==='sprint')return true;if(this.state==='slow')return G.wall.started;return false},
+  wallMul(){return this.state==='freeze'?2.8:this.state==='slow'?1.5:1},
+  bar(){if(this.state==='sprint'||this.state==='done'||G.wall.started)return `<div class="lbl">${this.state==='freeze'?'終於開始了……一個字一個字慢慢擠。':'⚡ 截止前的急迫感……大腦醒過來了！'}</div><div class="row"><button class="big" data-hold="write">✍️ 寫報告（按住）</button></div><div class="prog"><i id="pbar"></i></div><div class="proglbl" id="plbl"></div>`;
+   return `<div class="lbl">${this.state==='freeze'?'🧊 腦袋當機了。檔案打開了，卻一個字都打不出來。':'腦袋一片空白……先把檔案打開再說。'}</div><div class="row"><button class="big" data-hold="write">🧱 開始寫（按住）</button><button data-hold="fidget">🌀 轉筆</button></div><div class="prog"><i id="wbar" style="background:#b58ae8"></i></div><div class="proglbl">推開的進度</div>`},
   async begin(){const p=Math.round(G.prog);
    await say('你（內心）',p>=100?'（報告其實已經寫完了。可以去睡了。）':'（現在才寫到 '+p+'%……完蛋了。）');
-   if(p<100){await say('你（內心）','（……奇怪，現在腦袋突然超清楚。）');if(G.compare)toast('一般的你：早就寫完，已經睡了')}},
+   if(p<100){
+     if(this.state==='sprint')await say('你（內心）','（……奇怪，現在腦袋突然超清楚。）');
+     else if(this.state==='slow')await say('你（內心）','（腦袋好亂……先打開檔案，寫一行就好。）');
+     else{await say('你（內心）','（打開檔案，盯著螢幕……一個字都打不出來。）');await say('你（內心）','（越急越寫不出來。心跳好快。）')}
+     if(G.compare)toast('一般的你：早就寫完，已經睡了')}},
   tick(dt){if(G.prog>=100){if(!this.done){this.done=true;S().sleep=fmtTime(G.clock);G.fast=true;toast('✅ 寫完了！現在是 '+fmtTime(G.clock))}return}
-   const b=G.brain;if(input.write&&b.daydream<=0)G.prog=clamp(G.prog+(100/24)*(b.hyper?1.8:.8)*dt,0,100);
+   const b=G.brain,W=G.wall;
+   if(this.state!=='sprint'&&!W.started){if(b.daydream>0)W.prog=0;
+     if(input.write&&b.daydream<=0){W.prog+=dt;if(W.prog>=wallNeed()*this.wallMul()){W.started=true;Sound.good();if(this.state==='slow')inner('……好，開始了。好像可以！');refreshBar()}}else W.prog=Math.max(0,W.prog-dt*.8);
+     const w=$('#wbar');if(w)w.style.width=clamp(W.prog/(wallNeed()*this.wallMul())*100,0,100)+'%';return}
+   if(this.state==='freeze'&&b.daydream>0&&W.started){W.started=false;W.prog=0;refreshBar();return}
+   if(input.write&&b.daydream<=0)G.prog=clamp(G.prog+(100/24)*(b.hyper?1.8:this.state==='freeze'?.28:.8)*dt,0,100);
    const pb=$('#pbar');if(pb){pb.style.width=G.prog+'%';$('#plbl').textContent='完成 '+Math.round(G.prog)+'%'}},
-  finish(){S().report=Math.round(G.prog);if(!S().sleep)S().sleep='03:00 還沒寫完'},
+  finish(){S().report=Math.round(G.prog);S().sprintState=this.state;if(!S().sleep)S().sleep='03:00 還沒寫完'},
   bot(){input.write=true},
  },
  {id:'unext',map:'dorm',kind:'scene',t0:'12:00',t1:'12:00',real:0,title:'一週後',
@@ -1541,7 +1556,8 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
   async begin(){const s=S();
    if(!s.emailSent)await say('組員（LINE）','{name}，助教說我們組沒交分組名單……你不是說你會寄嗎？');
    else if(s.emailLate)await say('組員（LINE）','助教說我們的名單遲交，扣分了。');
-   await say('教授的評語',s.report>=100?'內容很有創意，觀點獨特！但格式和引用不完整。成績：B':'報告沒有寫完。成績：C-');
+   await say('教授的評語',s.report>=100?'內容很有創意，觀點獨特！但格式和引用不完整。成績：B':s.report>=60?'報告沒有寫完。成績：C-':'報告只交了一小部分。成績：D');
+   if(s.sprintState==='freeze')await say('你（內心）','（那天晚上，你明明很想寫，卻怎麼樣都動不了。\n別人只看到「又拖到最後」。）');
    if(G.save.iq>=120)await say('你（內心）','（從小到大，你都靠「最後一刻爆發」和聰明過關。\n但大學沒有人幫你記住所有事——聰明，開始不夠用了。）');
    await diagnosisEvent(async()=>{await say('旁白','深夜，你滑到一篇文章〈成人 ADHD 的 10 個特徵〉。\n……每一條，都是你。');
      return (await say('你（內心）','要去看看嗎？',{choices:['去身心科做評估','應該只是我不夠努力']}))===0});
