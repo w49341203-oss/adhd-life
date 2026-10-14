@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.5';
+const VERSION='v0.6.6';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -991,6 +991,8 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 /* ---------- 座位任務共用 ---------- */
 // ADHD 做事效率：就算有輔助，切換、重新開始、檢查還是比一般人多花力氣
 const ADHD_EFF=.88;
+// 進度條整體速度（Helen：別讓人一直覺得失敗）
+const WORK_SPEED=1.3;
 const MED_RESP={
   good:{name:'效果很好',mods:{drainMul:.45,focusPlus:12,restMul:.8,decayMul:.6},eff:1,wall:1.8,note:'這個角色對藥物反應很好：坐著做事幾乎能跟一般人一樣。'},
   partial:{name:'部分有效',mods:{drainMul:.6,focusPlus:8,restMul:.85,decayMul:.75},eff:.88,wall:1.5,note:'這個角色對藥物部分有效：有明顯幫助，但還是比一般人吃力。'},
@@ -1070,9 +1072,9 @@ function seatWork(dt,rate){
   const b=G.brain;
   if(rate>0&&input.write&&b.daydream<=0){
     const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp)*(b.typical?1:(b.mods.eff||ADHD_EFF));
-    const q0=Math.floor(G.prog/25);G.prog=clamp(G.prog+rate*mul*dt,0,100);
+    const q0=Math.floor(G.prog/25);G.prog=clamp(G.prog+rate*mul*WORK_SPEED*dt,0,100);
     if(KIND()&&Math.floor(G.prog/25)>q0&&G.prog<100){b.dopa=clamp(b.dopa+12,0,100);b.mood=clamp(b.mood+2,0,100);toast('👍 '+pick(['寫到這裡了，很好！','有進度喔！','你很努力耶！']))}
-    if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=ADHD_EFF*(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*dt,0,100);G.sprogUsed=true}
+    if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=ADHD_EFF*(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*WORK_SPEED*dt,0,100);G.sprogUsed=true}
   }
   const pb=$('#pbar');if(pb&&rate>0){pb.style.width=G.prog+'%';$('#plbl').textContent='完成 '+Math.round(G.prog)+'%'+(G.compare?'　｜　一般的你 '+Math.round(G.gprog)+'%':'')}
 }
@@ -1223,6 +1225,7 @@ const FREE={
   ball:{icon:'⚽',label:'去踢球',min:3,trap:1,fx:{rest:-100,energy:10,dopa:15,mood:6},txt:'跑一跑，身體終於舒服了！'},
   beetle:{icon:'🪲',label:'蹲下來看獨角仙',min:2,trap:1,fx:{dopa:12,mood:3},txt:'牠的角好帥……'},
   board:{icon:'📋',label:'看佈告欄',min:1,fx:{dopa:4},txt:['下週校慶要選班服顏色','圖書館新書到了','失物招領：一隻藍色水壺','下個月有健康檢查']},
+  boardO:{icon:'📋',label:'看公告',min:1,fx:{dopa:4},txt:['下週五部門聚餐，記得填表','提醒：月底前要交報帳單據','歡迎新同事小林報到！','茶水間冰箱週五會清空','停車場下週整修']},
   chalk:{icon:'🧽',label:'幫忙擦黑板',min:2,fx:{mood:6,rest:-20},txt:'老師：「謝謝你！」'},
   plant:{icon:'🪴',label:'看看盆栽',min:1,fx:{mood:2,anx:-4},txt:'葉子上有一隻小瓢蟲'},
   window:{icon:'🪟',label:'看窗外',min:2,trap:1,fx:{anx:-6,energy:4},txt:'雲慢慢飄過去……'},
@@ -1236,7 +1239,7 @@ const FREE={
   book:{icon:'📖',label:'翻小樂的繪本',min:3,fx:{mood:4},txt:'這本小時候好像也看過'},
 };
 const MAP_FREE={home:[['comic',5,3],['fridge',20,3],['sofa',10,6],['bed',3,3]],school:[['board',16,2],['chalk',7,2],['plant',17,10],['window',6,14],['kids',7,5]],
-  office:[['coffee',24,3],['snack',23,6],['stretch',14,2],['board',26,2]],apt:[['sofa',10,7],['fridge',21,3],['water',22,3],['book',6,3]],dorm:[['comic',11,3],['fridge',12,7]]};
+  office:[['coffee',24,3],['snack',23,6],['stretch',14,2],['boardO',26,2]],apt:[['sofa',10,7],['fridge',21,3],['water',22,3],['book',6,3]],dorm:[['comic',11,3],['fridge',12,7]]};
 const ENT_FREE={tv:'tv',cat:'cat',lego:'lego',phone:'phone',console:'game',bed:'bed',ball:'ball',beetle:'beetle',chat:'gossip',cake:'snack',kidl:'kidplay'};
 function addFreeActs(){
   for(const e of G.ents){const k=ENT_FREE[e.id];if(k&&!e.item&&!e.trigger&&!e.talk){e.free=k;e.nointeract=false;e.label=FREE[k].icon+' '+FREE[k].label}}
@@ -1253,7 +1256,7 @@ function doFree(e){const f=FREE[e.free];if(!f)return;if(e.cd&&G.segT<e.cd){toast
 }
 
 /* ---------- 共用小工具 ---------- */
-function wallNeed(){const b=G.brain;return b.typical?.4:clamp(1.2+(65-b.dopa)/14,1,5.5)/(sup('med')?medResp().wall:1)}
+function wallNeed(){const b=G.brain;return b.typical?.3:clamp(.8+(65-b.dopa)/18,.7,3.6)/(sup('med')?medResp().wall:1)}
 function wallWork(dt,rate){
   const b=G.brain,W=G.wall;
   if(b.shDopa!=null){const SW=G.swall||(G.swall={prog:0,started:false});
@@ -1684,11 +1687,11 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    refreshBar()},
   tick(dt){const TK=G.tasks,b=G.brain,k=TK.cur;
    if(k&&TK[k].p<100){const t=TK[k];
-     if(t.fun){if(input.write&&b.daydream<=0)t.p=clamp(t.p+(100/t.size)*(b.hyper?1.5:1)*dt,0,100)}
+     if(t.fun){if(input.write&&b.daydream<=0)t.p=clamp(t.p+(100/t.size)*(b.hyper?1.5:1)*WORK_SPEED*dt,0,100)}
      else{if(b.daydream>0&&G.wall.started){G.wall.started=false;G.wall.prog=0;refreshBar()}
        if(!G.wall.started){if(input.write&&b.daydream<=0){G.wall.prog+=dt;if(G.wall.prog>=wallNeed()){G.wall.started=true;Sound.good();refreshBar()}}else G.wall.prog=Math.max(0,G.wall.prog-dt*.8);
          const w=$('#wbar');if(w)w.style.width=clamp(G.wall.prog/wallNeed()*100,0,100)+'%'}
-       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(b.mods.eff||ADHD_EFF);t.p=clamp(t.p+(100/t.size)*mul*dt,0,100)}}
+       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(b.mods.eff||ADHD_EFF);t.p=clamp(t.p+(100/t.size)*mul*WORK_SPEED*dt,0,100)}}
      const pb=$('#pbar');if(pb)pb.style.width=t.p+'%';
      if(t.p>=100){b.completeNote(k);Sound.good();toast('✅ '+t.label+' 完成');TK.cur=null;refreshBar()}}
    G.gt+=dt;
