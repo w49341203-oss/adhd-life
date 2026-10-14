@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.3';
+const VERSION='v0.6.5';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -659,7 +659,8 @@ function onBrain(type,d){
       if(G.seg.kind==='seat'){b.daydream=3;showDaydream('📱 '+d.text,'滑手機中……一回神，時間就不見了',d.id)}
       else if(G.player&&!G.seated){G.player.auto={x:G.player.x,y:G.player.y,t:0,stay:2.5,stuck:0}}
       toast('📱 回過神來……已經過了 '+j+' 分鐘');Sound.drop();return}
-    {const ac=actOf(d);if(ac&&!G.brain.typical&&canAct()&&!(G.player&&G.player.trip)&&doAct(ac,d)){Sound.drop();return}}
+    {const ac=actOf(d);if(ac&&!G.brain.typical&&canAct()&&!(G.player&&G.player.trip)){Sound.drop();b.daydream=1.8;showDaydream(d.text,'來不及丟掉……身體自己先動了',d.id);
+      after(1.5,()=>{if(!G.running)return;b.daydream=0;$('#daydream').style.display='none';if(!doAct(ac,d)){b.daydream=2;showDaydream(d.text)}});return}}
     if(G.seg.kind==='seat'){b.daydream=3;showDaydream(d.text,null,d.id)}
     else if(G.seg.kind==='roam'){
       const e=d.lure&&G.ents.find(e=>e.id===d.lure);
@@ -671,11 +672,13 @@ function onBrain(type,d){
   if(type==='note-lost'&&G.seg&&G.seg.refreshOnNotes)setTimeout(refreshBar,0);
   if(type==='note-lost'){G.lastBrain={t:G.clock,txt:'「'+d.text+'」從便利貼上掉了'};S().lost++;toast('📝「'+degrade(d.text,0)+'」……咦？忘了。');Sound.drop();fallNote(d.text)}
   if(type==='overflow-notes'){d.forEach(n=>{S().lost++;fallNote(n.text)});inner('等等…還有一個是什麼？')}
-  if(type==='rest-overflow'&&G.seg&&G.seg.getUp){getUpEvent();return}
+  if(type==='rest-overflow'&&G.seg&&G.seg.getUp){getUpSoon();return}
   if(type==='rest-overflow'){
     S().overflow++;
     if(Math.random()>G.save.outward){S().masked++;b.anx=clamp(b.anx+15,0,100);b.mood=clamp(b.mood-4,0,100);b.energy=clamp(b.energy-15,0,100);toast('你用盡力氣忍住了。沒有人發現……但好累。');if(G.run)(G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen:'看起來安靜、很乖',brain:'用盡力氣硬忍住想動的身體'});inner('不能動…不能被發現…')}
-    else if(G.seg.onOverflow){b.rest=30;if(G.seg.kind!=='seat'||G.seg.id==='nap'||!wanderInClass(()=>G.seg.onOverflow()))G.seg.onOverflow()}
+    else if(G.seg.onOverflow){b.rest=30;
+      if(G.seg.kind==='seat'&&G.seg.id!=='nap'&&WANDER_SPOTS[G.map.name]&&!(G.player&&G.player.trip)){b.daydream=1.8;showDaydream('坐不住了……','身體自己站起來了');after(1.5,()=>{if(!G.running)return;b.daydream=0;$('#daydream').style.display='none';if(!wanderInClass(()=>G.seg.onOverflow()))G.seg.onOverflow()})}
+      else G.seg.onOverflow()}
     else{b.rest=40;toast('你忍不住大動作伸了個懶腰，旁邊的人看了你一眼。')}
   }
   if(type==='hyper'){$('#hyperTag').style.display=d?'block':'none';if(d)inner('哇……好好玩……')}
@@ -997,6 +1000,8 @@ const GETUP_SPOTS={
   home:[[20,3,'開冰箱看看有什麼吃的'],[18,3,'去廚房倒杯水'],[11,2,'走到窗邊發呆'],[10,7,'倒在沙發上躺一下']],
   dorm:[[12,7,'開小冰箱找飲料'],[10,2,'走到窗邊晃一下'],[7,8,'走到門口又走回來']],
   office:[[24,3,'去茶水間倒杯咖啡'],[14,2,'站在窗邊伸展一下'],[8,12,'走去同事座位晃一下'],[23,6,'去茶水間找零食']]};
+function getUpSoon(){const b=G.brain;if(G.getUpPending||(G.player&&G.player.trip))return;G.getUpPending=true;b.daydream=1.8;showDaydream(pick(['好想起來走一走……','坐不住了……','腳好想動……']),'身體自己站起來了');
+  after(1.5,()=>{G.getUpPending=false;if(!G.running)return;b.daydream=0;$('#daydream').style.display='none';getUpEvent()})}
 function getUpEvent(){const b=G.brain,p=G.player;if(!p||p.trip)return;
   S().getups=(S().getups||0)+1;
   const spots=(GETUP_SPOTS[G.map.name]||[]).slice().sort(()=>Math.random()-.5);
@@ -1329,7 +1334,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    ['段考（國文／英文／數學）',s.exam+' 分'+(s.examSub?'（國 '+(s.examSub['國文']??'—')+'／英 '+(s.examSub['英文']??'—')+'／數 '+(s.examSub['數學']??'—')+'）':''),g.exam+' 分'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ、有沒有複習有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
    ['被嘲笑時忍住了',s.held===null?'—':yes(s.held),yes(true)],['下課準時回座',yes(!s.backLate),yes(true)],
    ['⭐ 大隊接力跑出',s.relay+' 公尺',g.relay+' 公尺',true],['搶跑',s.falseStart+' 次','0 次'],
-   ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
+   ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘',(g.phoneMin||0)+' 分鐘'],...commonRows(s,b,g)],
   cards:[
    s.relay>g.relay?`⭐ <b>你跑贏了一般的你：</b>${s.relay} 公尺 vs ${g.relay} 公尺。很多 ADHD 的人精力旺盛、在運動和需要爆發力的場合特別亮眼。`:'',
    '📖 <b>讀題時會跳字跳行</b><br><b>遊戲裡：</b>眼睛有時直接跳過一個字（像「不是」）或一整行，自己卻沒發現；再看一次，才看到漏掉的字。<br><b>現實中：</b>很多 ADHD 的人說題目要讀好幾次、常漏看關鍵字或跳行，這和注意力飄走、工作記憶有關。至於把字看反、讀錯字，比較像「讀寫障礙」的特徵；兩者常常一起出現，但不是每個 ADHD 都會。',
@@ -1505,7 +1510,7 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
  report(s,g,b){return{rows:[
    ['按了幾次貪睡',s.snooze+' 次','0 次'],['帶齊東西',s.items+' / 4','4 / 4'],['準時出門',yes(!s.late),yes(true)],
    ['上課筆記',s.notes+'%',g.notes+'%'],['兩點前寄出分組名單',yes(s.emailSent&&!s.emailLate),yes(true)],
-   ['下午寫的報告',s.mid+'%',g.mid+'%'],['被遊戲吃掉的時間',s.gameMin+' 分鐘','0 分鐘'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],
+   ['下午寫的報告',s.mid+'%',g.mid+'%'],['被遊戲吃掉的時間',s.gameMin+' 分鐘','0 分鐘'],['被手機吃掉的時間',s.phoneMin+' 分鐘',(g.phoneMin||0)+' 分鐘'],
    ['截止前一晚',({sprint:'⚡ 衝刺',slow:'🐢 卡了一陣才開始',freeze:'🧊 卡住了',done:'早就寫完'}[s.sprintState]||'—')+'（多寫了 '+Math.max(0,s.report-s.mid)+'%）','不需要',s.sprintState==='sprint'],['報告最後完成',s.report+'%',g.report+'%'],['寫完的時間',s.sleep||'—','下午就寫完了'],...commonRows(s,b,g)],
   cards:[
    '🧱 <b>拖延不是懶</b><br><b>遊戲裡：</b>無聊的事要先推開一道「開始的牆」。<br><b>現實中：</b>很多 ADHD 的人描述「知道要做，卻怎樣都開始不了」。把任務切小、先做 5 分鐘，通常比較容易開始。',
@@ -1618,7 +1623,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    ['⭐ 想出好點子',s.idea||s.interrupt?'💡 有':'—','—',true],['打斷主管',s.interrupt?'1 次':'0 次','0 次'],
    ['三點前回客戶 email',yes(s.email),yes(true)],['報價單',yes(s.quote),yes(true)],['訂會議室',yes(s.room),yes(true)],
    ['簡報完成度',s.slides+'%','100%'],['⭐ 主管誇簡報有創意',yes(s.slides>=100),'—',true],['被批評時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],
-   ['下班帶走鑰匙',yes(s.keys),yes(true)],['衝動購物',s.spent?'NT$'+s.spent.toLocaleString():'NT$0','NT$0'],['被訊息吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
+   ['下班帶走鑰匙',yes(s.keys),yes(true)],['衝動購物',s.spent?'NT$'+s.spent.toLocaleString():'NT$0','NT$0'],['被訊息吃掉的時間',s.phoneMin+' 分鐘',(g.phoneMin||0)+' 分鐘'],...commonRows(s,b,g)],
   cards:[
    '👻 <b>看不見的任務</b><br>今天有些工作，從你的任務板上「消失」了——因為便利貼掉了。對 ADHD 來說，「眼睛看不到」幾乎等於「不存在」。把任務寫在看得到的地方，不是囉嗦，是必需品。',
    '💔 <b>對批評特別敏感</b><br><b>遊戲裡：</b>一句小提醒，也會觸發「情緒潰堤」。<br><b>現實中：</b>有些 ADHD 的人對批評特別敏感，可能跟從小累積的「又被罵」經驗有關。',
@@ -1744,7 +1749,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
  report(s,g,b){return{rows:[
    ['早上的事情完成',s.items+' / 4','4 / 4'],['小樂準時上學',yes(!s.late),yes(true)],['記得買紀念日蛋糕',yes(s.cake),yes(true)],
    ['湯沒有燒焦',yes(s.soupOk),yes(true)],['晾衣服',yes(s.laundry),yes(true)],['陪小樂看功課',yes(s.khw),yes(true)],['你陪小樂寫功課的方式',s.khwStyle==='kind'?'一次一題＋稱讚（8 分鐘寫完）':s.khwStyle==='scold'?'催促責罵（拖了 20 分鐘）':'—','—'],
-   ['跟伴侶談話時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
+   ['跟伴侶談話時冷靜',s.calm===null?'—':yes(s.calm),yes(true)],['被手機吃掉的時間',s.phoneMin+' 分鐘',(g.phoneMin||0)+' 分鐘'],...commonRows(s,b,g)],
   cards:[
    '🧬 <b>ADHD 和家族有關</b><br>研究發現基因扮演重要角色（<a href="https://www.nimh.nih.gov/health/publications/attention-deficit-hyperactivity-disorder-what-you-need-to-know" target="_blank" rel="noopener">NIMH</a>）。不少大人是在孩子確診時，才發現「原來我也是」。',
    '🏠 <b>家，是最難的關卡</b><br>工作有主管、有截止日；家務沒有人提醒、永遠做不完，還要同時記好多件事。這對 ADHD 的大腦是最大的考驗，也最容易讓伴侶誤會成「不在乎」。',
@@ -1900,7 +1905,7 @@ function showSegCard(i){
   $('#goSeg').onclick=()=>{Sound.init();hideScreen();beginSeg(i)};
 }
 function beginSeg(i){
-  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.autoFidget=0;G.tapT=0;G.tiltT=0;$('#lab').className='';$('#lab').style.display='none';
+  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.autoFidget=0;G.tapT=0;G.tiltT=0;G.getUpPending=false;$('#lab').className='';$('#lab').style.display='none';
   G.map=getMap(seg.map);G.ents=[];G.npcs=[];
   if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes();if(G.run)G.run.written=[]}
   renderWritten();
@@ -2264,12 +2269,13 @@ function step(dt){
   const c={pace:seg.pace||1,seated:seg.kind==='seat'||G.seated,working:working||G.seated,fidget:fid,walking,boring:!!seg.boring,interesting:(seg.isInteresting?!!seg.isInteresting():(!!seg.interesting&&labOn))||inPlay,dist:seg.dist,restMul:seg.restMul,source:thoughtSource,noThoughts:!!G.qte||seg.kind==='scene'};
   G.brain.update(dt,c);
   G.gb.update(dt,{seated:c.seated,working:seg.kind==='seat',fidget:false,walking:seg.kind==='roam',boring:c.boring,interesting:!!seg.interesting&&labOn,dist:c.dist,restMul:c.restMul,noThoughts:seg.kind==='scene',pace:seg.pace||1});
+  if(seg.phone&&G.run&&Math.random()<dt*.025){const j=Math.max(2,Math.round((seg.phoneJump||15)*rand(.2,.35)));GS().phoneMin=(GS().phoneMin||0)+j}
   if(G.brain.daydream<=0){$('#daydream').style.display='none';if(G.flyEl){G.flyEl.remove();G.flyEl=null}}
   else if(G.ddSub)$('#ddSub').textContent=G.ddSub+'（'+Math.ceil(G.brain.daydream)+'）';
   if(seg.returnAt&&!G.returning&&G.clock>=hm(seg.t0)+(hm(seg.t1)-hm(seg.t0))*seg.returnAt){G.returning=true;classmatesReturn();toast(G.brain.hyper?'（遠遠的……大家好像在往哪裡走？）':'同學們陸續走回教室了',G.brain.hyper)}
   if(G.distract){G.distract.t-=dt;if(G.distract.t<=0)G.distract=null}
   if(G.player&&G.player.trip&&seg.kind==='seat')tripStep(dt);
-  if(seg.getUp&&seg.kind==='seat'&&!G.brain.typical&&G.brain.daydream<=0&&!(G.player&&G.player.trip)&&G.brain.rest>45&&!G.qte&&Math.random()<dt*.04)getUpEvent();
+  if(seg.getUp&&seg.kind==='seat'&&!G.brain.typical&&G.brain.daydream<=0&&!(G.player&&G.player.trip)&&!G.getUpPending&&G.brain.rest>45&&!G.qte&&Math.random()<dt*.04)getUpSoon();
   seg.tick&&seg.tick(dt);
 }
 function moveActor(a,dx,dy,dt,sp){
