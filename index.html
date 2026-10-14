@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.5';
+const VERSION='v0.4.6';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -469,7 +469,11 @@ class Brain{
     this.out=Number.isFinite(+p.outward)?+p.outward:(p.gender==='M'?.65:.35);this.energy=100;
     this.comp=clamp((p.iq-100)/40,-.5,1)*(ctx.compScale==null?1:ctx.compScale);
     this.stageRest=ctx.stage==='adult'?.7:ctx.stage==='teen'?.85:1;
-    this.memCap=typical?(4+(p.iq>=125?1:0)-(p.iq<90?1:0)):(p.iq>=125?3:2)+(this.mods.capPlus||0);
+    // ① 一般基準：同一個人、沒有 ADHD 時的大腦
+    const B=this.base={memCap:4+(p.iq>=125?1:0)-(p.iq<90?1:0),thought:.03+(1-this.out)*.02,decay:.0028*(1-.3*this.comp),rest:.25+this.out*.35,drain:.5,focus:78+this.comp*8};
+    // ② ADHD：在同一個基準上，加上 ADHD 的影響（工作記憶少 2 格、念頭多約 5.5 倍、記憶褪色快約 5.7 倍、坐不住快 6 倍、無聊時動力消耗快 3.2 倍）
+    this.adhd={memCap:-2,thought:5.5,decay:5.7,rest:6,drain:3.2};
+    this.memCap=typical?B.memCap:Math.max(2,B.memCap+this.adhd.memCap)+(this.mods.capPlus||0);
     this.focus=typical?85:70;this.dopa=typical?70:55;this.rest=0;this.mood=70;this.anx=typical?5:15;
     this.notes=[];this.thoughts=[];this.hyper=false;this.daydream=0;this.tCount=0;this.nid=1;this.on=()=>{};
   }
@@ -492,7 +496,7 @@ class Brain{
   refresh(id){const n=this.notes.find(n=>n.id===id);if(!n||n.done||n.cd>0)return false;n.life=Math.min(1,n.life+.45);n.cd=6;this.focus=Math.max(0,this.focus-3);return true}
   rate(c){
     if(this.hyper||this.daydream>0)return 0;
-    let r=this.typical?(.03+(1-this.out)*.02):(.17+(1-this.out)*.1);
+    let r=this.base.thought*(this.typical?1:this.adhd.thought);
     r*=(c.dist==null?1:c.dist)*(this.mods.thoughtMul||1);if(this.dopa<30)r*=1.7;if(c.interesting)r*=.3;if(c.noThoughts)r=0;
     return r;
   }
@@ -501,21 +505,22 @@ class Brain{
     if(A&&c.interesting&&this.dopa>72&&!this.hyper){this.hyper=true;this.thoughts.forEach(t=>t.gone=true);this.emit('hyper',true)}
     if(this.hyper&&!c.interesting){this.hyper=false;this.emit('hyper',false)}
     let dd=0;
-    if(c.interesting)dd+=A?6:2.5;else if(c.working&&c.boring)dd-=A?1.6*(this.mods.drainMul||1):.5;
+    if(c.interesting)dd+=A?6:2.5;else if(c.working&&c.boring)dd-=this.base.drain*(A?this.adhd.drain*(this.mods.drainMul||1):1);
     if(c.walking)dd+=A?1.5:.3;if(c.fidget)dd+=A?1.2:.2;
     if(!c.working&&!c.interesting)dd+=(50-this.dopa)*.04;
     this.dopa=clamp(this.dopa+dd*dt,0,100);
     if(A&&(this.mods.drainMul||this.mods.focusPlus)){
       if(this.shDopa==null){this.shDopa=this.dopa;this.shFocus=this.focus}
-      let sd=0;if(c.interesting)sd+=6;else if(c.working&&c.boring)sd-=1.6;if(c.walking)sd+=1.5;if(c.fidget)sd+=1.2;if(!c.working&&!c.interesting)sd+=(50-this.shDopa)*.04;
+      let sd=0;if(c.interesting)sd+=6;else if(c.working&&c.boring)sd-=this.base.drain*this.adhd.drain;if(c.walking)sd+=1.5;if(c.fidget)sd+=1.2;if(!c.working&&!c.interesting)sd+=(50-this.shDopa)*.04;
       this.shDopa=clamp(this.shDopa+sd*dt,0,100);
-      const st=this.hyper?100:clamp(30+this.shDopa*.5+this.comp*8-(this.rest>70?10:0),15,92);
+      const st=this.hyper?100:clamp(this.base.focus-48+this.shDopa*.5-(this.rest>70?10:0)-(this.energy<25?8:0),15,92);
       this.shFocus=clamp(this.shFocus+(st-this.shFocus)*Math.min(1,dt*.8),0,100);
     }
-    let target=this.typical?85:clamp(30+this.dopa*.5+this.comp*8+(this.mods.focusPlus||0)-(this.rest>70?10:0)-(this.energy<25?8:0),15,92);
+    let target=this.typical?clamp(this.base.focus+(this.dopa-70)*.15,40,95)
+      :clamp(this.base.focus-48+this.dopa*.5+(this.mods.focusPlus||0)-(this.rest>70?10:0)-(this.energy<25?8:0),15,92);
     if(this.hyper)target=100;
     this.focus=clamp(this.focus+(target-this.focus)*Math.min(1,dt*.8),0,100);
-    if(c.seated)this.rest+=(this.typical?(.25+this.out*.35):(1.5+this.out*2.2))*(c.restMul||1)*this.stageRest*(this.mods.restMul||1)*dt;
+    if(c.seated)this.rest+=this.base.rest*(this.typical?1:this.adhd.rest)*(c.restMul||1)*this.stageRest*(this.mods.restMul||1)*dt;
     if(c.walking)this.rest-=12*dt;
     if(c.fidget)this.rest-=(A?9:6)*dt;
     if(!c.seated&&!c.walking)this.rest-=2*dt;
@@ -527,8 +532,8 @@ class Brain{
     for(const n of this.notes){
       if(n.cd>0)n.cd-=dt;
       if(n.done){n.doneT-=dt;continue}
-      if(A)n.life-=.016*(1-.35*this.comp)*(this.mods.decayMul||1)*(this.focus<40?1.6:1)*(this.hyper?.3:1)*dt;
-      else n.life-=.0028*(1-.3*this.comp)*dt;
+      if(A)n.life-=this.base.decay*this.adhd.decay*(this.mods.decayMul||1)*(this.focus<40?1.6:1)*(this.hyper?.3:1)*dt;
+      else n.life-=this.base.decay*dt;
     }
     for(const n of this.notes.filter(n=>!n.done&&n.life<=0)){this.emit('note-lost',n)}
     this.notes=this.notes.filter(n=>n.done?n.doneT>0:n.life>0);
@@ -1180,7 +1185,7 @@ const EXAM_B=[
   {q:'How ___ you?',o:['is','am','are'],a:2,k:1},
 ];
 function garble(str,seed){const G_='#%&@?*~▯ӂʘ';let o='';for(let i=0;i<str.length;i++){const c=str[i];o+=/[A-Za-z]/.test(c)?G_[(c.charCodeAt(0)*7+i*13+seed)%G_.length]:c}return o}
-function examSkipP(){const b=G.brain;return b.typical?0:clamp(.04+(60-b.focus)/250,.02,.25)}
+function examSkipP(){const b=G.brain;return clamp(.04+(60-b.focus)/250,0,.25)}
 function buildQ(q,careful,unk){
   const U=[];const words=t=>/\s/.test(t)?t.split(' ').map(w=>w+' '):[t];
   if(q.lines)q.lines.forEach((ln,li)=>words(ln).forEach(w=>U.push({text:w,line:li})));
@@ -1234,9 +1239,11 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
   card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
   setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=G.run.bag.notes?base*.3:clamp(base+.12,0,.65);
-   const mark=list=>list.map(q=>q.k&&Math.random()<unk);
-   G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F),back:mark(EXAM_B)},cur:null};this.newQ();
-   const kq=[...EXAM_F,...EXAM_B].filter(q=>q.k).length;let gu=0;for(let i=0;i<kq;i++)if(Math.random()<base*.3&&Math.random()<2/3)gu++;GS().exam=Math.round((9-gu)/9*100)},
+   // 每題同一個隨機數：一般的你記不起來的字，ADHD 的你也一定記不起來（同一個人）
+   const draws={front:EXAM_F.map(()=>Math.random()),back:EXAM_B.map(()=>Math.random())};
+   const mark=(list,side)=>list.map((q,i)=>!!q.k&&draws[side][i]<unk);
+   G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F,'front'),back:mark(EXAM_B,'back')},cur:null};this.newQ();
+   let gu=0;[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{if(q.k&&draws[sd][i]<base*.3&&Math.random()<2/3)gu++}));GS().exam=Math.round((9-gu)/9*100)},
   newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
   renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
    const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
