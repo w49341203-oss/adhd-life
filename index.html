@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.6';
+const VERSION='v0.4.8';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -949,12 +949,14 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 ]};
 
 /* ---------- 座位任務共用 ---------- */
+// ADHD 做事效率：就算有輔助，切換、重新開始、檢查還是比一般人多花力氣
+const ADHD_EFF=.88;
 function seatWork(dt,rate){
   const b=G.brain;
   if(rate>0&&input.write&&b.daydream<=0){
-    const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp);
+    const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*(1+.15*b.comp)*(b.typical?1:ADHD_EFF);
     G.prog=clamp(G.prog+rate*mul*dt,0,100);
-    if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*dt,0,100);G.sprogUsed=true}
+    if(b.shDopa!=null&&(!G.swall||G.swall.started)){const sm=ADHD_EFF*(.35+.65*b.shFocus/100)*(b.shDopa<25?.6:1)*(1+.15*b.comp);G.sprog=clamp((G.sprog||0)+rate*sm*dt,0,100);G.sprogUsed=true}
   }
   const pb=$('#pbar');if(pb&&rate>0){pb.style.width=G.prog+'%';$('#plbl').textContent='完成 '+Math.round(G.prog)+'%'+(G.compare?'　｜　一般的你 '+Math.round(G.gprog)+'%':'')}
 }
@@ -1052,7 +1054,7 @@ const SUPPORTS=[
   {id:'timer',icon:'⏰',name:'計時器＋鬧鐘',desc:'時鐘永遠看得清楚，時間快到時會響。',},
   {id:'quiet',icon:'🎧',name:'安靜環境（手機放遠）',desc:'念頭泡泡少 40%，手機不會一直把你吸走。',mods:{thoughtMul:.6}},
   {id:'move',icon:'🏃',name:'規律運動＋允許動一動',desc:'坐不住累積得慢 40%，動一動還能補一點動力。',mods:{restMul:.6,drainMul:.8}},
-  {id:'med',icon:'💊',name:'藥物（醫師評估後）',desc:'動力不容易掉、專注的底子比較高、「開始的牆」變輕。不是每個人都適合，可能有副作用（例如食慾變差），一定要跟醫師討論。',mods:{drainMul:.5,focusPlus:12,restMul:.8}},
+  {id:'med',icon:'💊',name:'藥物（醫師評估後）',desc:'動力不容易掉、專注的底子比較高、「開始的牆」變輕。不是每個人都適合，可能有副作用（例如食慾變差），一定要跟醫師討論。',mods:{drainMul:.6,focusPlus:8,restMul:.85}},
   {id:'talk',icon:'🗣️',name:'讓身邊的人了解',desc:'老師、主管或伴侶知道你的狀況：被罵時心情受傷減半。',},
 ];
 function sup(id){return !!(G.run&&G.run.supports&&G.run.supports.includes(id))}
@@ -1243,7 +1245,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    const draws={front:EXAM_F.map(()=>Math.random()),back:EXAM_B.map(()=>Math.random())};
    const mark=(list,side)=>list.map((q,i)=>!!q.k&&draws[side][i]<unk);
    G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F,'front'),back:mark(EXAM_B,'back')},cur:null};this.newQ();
-   let gu=0;[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{if(q.k&&draws[sd][i]<base*.3&&Math.random()<2/3)gu++}));GS().exam=Math.round((9-gu)/9*100)},
+   G.ex.gunk={front:EXAM_F.map((q,i)=>!!q.k&&draws.front[i]<base*.3),back:EXAM_B.map((q,i)=>!!q.k&&draws.back[i]<base*.3)}},
   newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
   renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
    const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
@@ -1279,7 +1281,9 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
        if(!u.skip)u.at=G.segT;C.cursor++;C.next=C.t+(u.skip?0:.12+u.text.length*.05)}}
    renderExq()},
   onOverflow(){scold('監考老師','{name}，考試中不要一直動來動去、東張西望！')},
-  finish(){$('#lab').style.display='none';$('#lab').className='';const E=G.ex;S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
+  finish(){$('#lab').style.display='none';$('#lab').className='';const E=G.ex;
+   let gc=0;[['front',EXAM_F],['back',EXAM_B]].forEach(([sd,L])=>L.forEach((q,i)=>{const mine=E[sd][i];if(!E.gunk[sd][i])gc++;else if(mine===true)gc++;else if(mine==null&&Math.random()<1/3)gc++}));GS().exam=Math.round(gc/9*100);
+   S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
   bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length){if(E.cur&&E.cur.cursor<E.cur.U.length)return;return this.act('ans',String(list[E.i].a))}if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
  },
  {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
@@ -1541,7 +1545,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
      else{if(b.daydream>0&&G.wall.started){G.wall.started=false;G.wall.prog=0;refreshBar()}
        if(!G.wall.started){if(input.write&&b.daydream<=0){G.wall.prog+=dt;if(G.wall.prog>=wallNeed()){G.wall.started=true;Sound.good();refreshBar()}}else G.wall.prog=Math.max(0,G.wall.prog-dt*.8);
          const w=$('#wbar');if(w)w.style.width=clamp(G.wall.prog/wallNeed()*100,0,100)+'%'}
-       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1);t.p=clamp(t.p+(100/t.size)*mul*dt,0,100)}}
+       else if(input.write&&b.daydream<=0){const mul=(.35+.65*b.focus/100)*(b.dopa<25?.6:1)*ADHD_EFF;t.p=clamp(t.p+(100/t.size)*mul*dt,0,100)}}
      const pb=$('#pbar');if(pb)pb.style.width=t.p+'%';
      if(t.p>=100){b.completeNote(k);Sound.good();toast('✅ '+t.label+' 完成');TK.cur=null;refreshBar()}}
    G.gt+=dt;
@@ -2205,7 +2209,7 @@ function updateBrainUI(dt){
   renderMeters($('#metersMe'),b);
   const med=sup('med');$('#colMe .ctitle').textContent='你（ADHD）'+(med?'　💊 藥效中':'');
   const mm=$('#medMe');mm.style.display=med?'block':'none';
-  if(med)mm.textContent='💊 藥效中：專注底子 +12、動力掉得慢一半、「開始的牆」變輕。'+(b.shDopa!=null?'（沒吃藥的話，現在動力約 '+Math.round(b.shDopa)+'、專注約 '+Math.round(b.shFocus)+'）':'')+'念頭還是會冒，記事的習慣也還是要自己練。';
+  if(med)mm.textContent='💊 藥效中：專注底子 +8、動力掉得慢四成、「開始的牆」變輕。'+(b.shDopa!=null?'（沒吃藥的話，現在動力約 '+Math.round(b.shDopa)+'、專注約 '+Math.round(b.shFocus)+'）':'')+'念頭還是會冒，記事的習慣也還是要自己練。';
   if(G.compare){renderNotes($('#notesGh'),g,true);$('#capGh').textContent='格數 '+g.memCap;renderMeters($('#metersGh'),g);
     $('#gcount').textContent='今天冒出 '+g.tCount+' 個念頭，被拉走 '+((G.run&&G.run.gs.hijacks)||0)+' 次（很快就回神）。\n（你：冒出 '+b.tCount+' 個，被拉走 '+((G.run&&G.run.stats.hijacks)||0)+' 次）';
     $('#gprog').textContent=G.seg&&G.seg.kind==='seat'&&G.seg.boring?'任務進度 '+Math.round(G.gprog)+'%':''}
