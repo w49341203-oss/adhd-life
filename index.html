@@ -52,9 +52,11 @@ button{font-family:inherit;cursor:pointer}
 #toast div.muffled{opacity:.35;font-size:12px;filter:blur(.6px)}
 @keyframes toastIn{from{transform:translateY(-8px);opacity:0}}
 /* ---- daydream ---- */
-#daydream{position:absolute;inset:0;z-index:8;display:none;align-items:center;justify-content:center;pointer-events:none;
+#daydream{position:absolute;inset:0;z-index:8;display:none;align-items:flex-start;justify-content:center;padding-top:76px;pointer-events:none;
   background:radial-gradient(circle,rgba(200,210,255,.18),rgba(40,40,70,.55))}
-#daydream div{background:#fff;color:#334;border-radius:40px;padding:18px 28px;font-size:20px;font-weight:700;box-shadow:0 0 0 6px rgba(255,255,255,.4);animation:float 2s ease-in-out infinite;max-width:80%;text-align:center}
+#ddBox{background:#fff;color:#334;border-radius:28px;padding:14px 24px 12px;font-size:20px;font-weight:700;box-shadow:0 0 0 6px rgba(255,255,255,.4);animation:float 2s ease-in-out infinite;max-width:84%;text-align:center}
+#ddSub{font-size:13px;font-weight:700;color:#7a5ab8;margin-top:6px}
+.bub.fly{position:fixed;z-index:60;margin:0;animation:none;transition:transform .5s cubic-bezier(.3,.7,.3,1),opacity .5s;pointer-events:none}
 @keyframes float{50%{transform:translateY(-8px)}}
 /* ---- seat bar ---- */
 #seatbar{position:absolute;left:0;right:0;bottom:0;z-index:10;display:none;padding:8px 10px 10px;background:linear-gradient(transparent,rgba(27,31,48,.92) 30%)}
@@ -189,7 +191,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
     </div>
     <div id="hyperTag">🔦 超專注中</div>
     <div id="prompt"></div>
-    <div id="daydream"><div id="ddText"></div></div>
+    <div id="daydream"><div id="ddBox"><div id="ddText"></div><div id="ddSub"></div></div></div>
     <div id="lab"><div class="leaf">🍃</div><div class="score" id="labScore">發現 0</div></div>
     <div id="qte"><div class="q" id="qteQ"></div>
       <div style="font-size:12px;text-align:left" id="qteL1">煞車力</div><div class="bar"><i id="qteP"></i></div>
@@ -231,7 +233,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3.4';
+const VERSION='v0.3.6';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -558,7 +560,7 @@ function nextDlg(){
 }
 function advanceDlg(){if(!G.dlg||G.dlg.choices)return;Sound.blip();const r=G.dlg.res;nextDlg();r()}
 $('#dialog').addEventListener('click',advanceDlg);
-function toast(text,muffled){const d=document.createElement('div');d.textContent=text;if(muffled)d.className='muffled';$('#toast').appendChild(d);setTimeout(()=>d.remove(),muffled?2600:2400)}
+function toast(text,muffled){const box=$('#toast');while(box.children.length>=3)box.firstChild.remove();const d=document.createElement('div');d.textContent=text;if(muffled)d.className='muffled';$('#toast').appendChild(d);setTimeout(()=>d.remove(),muffled?2600:2400)}
 function inner(text){G.innerText=text;G.innerT=6;$('#innerMe').textContent='💭 '+text}
 function after(sec,fn){G.timers.push({t:sec,fn})}
 
@@ -594,10 +596,10 @@ function onBrain(type,d){
     if(d.kind==='self'){b.anx=clamp(b.anx+10,0,100);b.mood=clamp(b.mood-3,0,100)}
     if(G.seg.onHijack&&G.seg.onHijack(d)){Sound.drop();return}
     if(d.kind==='phone'){const j=G.seg.phoneJump||15;S().phoneMin=(S().phoneMin||0)+j;G.clock+=j;
-      if(G.seg.kind==='seat'){b.daydream=3;showDaydream('📱 '+d.text+'……（滑手機中）')}
+      if(G.seg.kind==='seat'){b.daydream=3;showDaydream('📱 '+d.text,'滑手機中……一回神，時間就不見了',d.id)}
       else if(G.player&&!G.seated){G.player.auto={x:G.player.x,y:G.player.y,t:0,stay:2.5,stuck:0}}
       toast('📱 回過神來……已經過了 '+j+' 分鐘');Sound.drop();return}
-    if(G.seg.kind==='seat'){b.daydream=3;showDaydream(d.text)}
+    if(G.seg.kind==='seat'){b.daydream=3;showDaydream(d.text,null,d.id)}
     else if(G.seg.kind==='roam'){
       const e=d.lure&&G.ents.find(e=>e.id===d.lure);
       if(e){G.player.auto={x:e.px,y:e.py+6,t:3.5,stay:e.stay||2.5,ent:e,stuck:0};toast('被「'+e.name+'」吸過去了…')}
@@ -622,7 +624,18 @@ function degrade(text,life){
   for(let i=0;i<text.length;i++){const ch=text[i];let h=((i*97+ch.charCodeAt(0)*31)%100)/100;if(/[0-9]/.test(ch))h*=.4;out+=(h<k&&!/[（）()\s]/.test(ch))?'？':ch}
   return out;
 }
-function showDaydream(t){$('#ddText').textContent='💭 '+t;$('#daydream').style.display='flex'}
+function showDaydream(t,sub,fromId){
+  const go=()=>{$('#ddText').textContent=(t.startsWith('📱')?'':'💭 ')+t;G.ddSub=sub||'發呆中……剛剛沒丟掉的念頭把你拉走了';$('#ddSub').textContent=G.ddSub;$('#daydream').style.display='flex'};
+  const el=fromId!=null&&document.querySelector('#cloudMe [data-id="'+fromId+'"]');
+  if(!el){go();return}
+  const r=el.getBoundingClientRect(),st=$('#stage').getBoundingClientRect();
+  const w=el.offsetWidth,h=el.offsetHeight,cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const c=el.cloneNode(true);c.classList.add('fly');c.style.left=(cx-w/2)+'px';c.style.top=(cy-h/2)+'px';c.style.width=w+'px';c.style.maxWidth='none';document.body.appendChild(c);G.flyEl=c;
+  el.style.visibility='hidden';
+  const tx=st.left+st.width/2-cx,ty=st.top+110-cy;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.transform='translate('+tx+'px,'+ty+'px) scale(1.6)';c.style.opacity='.2'}));
+  setTimeout(()=>{c.remove();if(G.brain&&G.brain.daydream>0)go()},480);
+}
 
 /* ================= 第一章 國小 ================= */
 function seatClassmates(){
@@ -645,6 +658,16 @@ function freeClassmates(){
   add(19,15,cor,true,'right');add(20,15,cor,true,'left');
   return arr;
 }
+function freeSeats(){const out=[];for(const r of DESK_ROWS)for(const cx of DESK_COLS)for(const x of [cx,cx+1]){const y=r+1;if(!(x===8&&y===8))out.push([x,y])}return out}
+function classmatesReturn(){
+  const seats=freeSeats(),m=G.map;let k=0;
+  for(const n of G.npcs){if(n.id||n.sit||n.path)continue;if(!n.wander&&!n.orbit&&n.dir==null)continue;
+    const st=seats[(k*7)%seats.length];k++;
+    const path=bfs(m,Math.floor(n.x/T),Math.floor((n.y-2)/T),st[0],st[1]);
+    n.wander=null;n.orbit=null;n.path=path||[];n.seat=st;}
+  G.ents=G.ents.filter(e=>!e.orbitBall);
+}
+function seatAllNow(){for(const n of G.npcs){if(n.seat||(!n.id&&!n.sit&&(n.path||n.wander||n.orbit))){const st=n.seat||freeSeats()[0];n.x=tc(st[0]);n.y=tf(st[1]);n.path=null;n.wander=null;n.orbit=null;n.sit=true;n.dir='up';n.moving=false}}}
 function schoolBase(free){
   G.npcs=free?freeClassmates():seatClassmates();
   G.npcs.push({id:'teacher',x:tc(10)-8,y:tf(2),look:LOOKS.teacher,dir:'down'});
@@ -761,7 +784,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
  },
 },
 /* 4. 下課 */
-{id:'recess',map:'school',kind:'roam',t0:'09:30',t1:'09:40',real:55,dist:1.2,title:'下課 10 分鐘',
+{id:'recess',map:'school',kind:'roam',t0:'09:30',t1:'09:40',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
  card:'上廁所、裝水，鐘響前回到座位。',pool:['福利社有沒有新零食？','走廊可以滑一下嗎？','等一下是什麼課？'],
  setup(){
    schoolBase(true);standPlayer(7,8);playgroundKids();
@@ -1125,7 +1148,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   finish(){const E=G.ex;S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
   bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length)return this.act('ans',String(list[E.i][2]));if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
  },
- {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,title:'下課 10 分鐘',
+ {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
   card:'要把作業交到講台、去上廁所，鐘響前回座位。',pool:['福利社有新口味嗎？','下一節是什麼課？'],
   setup(){schoolBase(true);standPlayer(7,8);playgroundKids();
    G.ents.push({id:'podium',name:'講台',kind:'none',tx:11,ty:3,label:'交作業'},{id:'toilet',name:'廁所',kind:'none',tx:5,ty:19,label:'上廁所'},{id:'seat',name:'座位',kind:'none',tx:8,ty:8,label:'坐回座位'});
@@ -1592,7 +1615,7 @@ function showSegCard(i){
   $('#goSeg').onclick=()=>{Sound.init();hideScreen();beginSeg(i)};
 }
 function beginSeg(i){
-  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;$('#lab').className='';$('#lab').style.display='none';
+  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;$('#lab').className='';$('#lab').style.display='none';
   G.map=getMap(seg.map);G.ents=[];G.npcs=[];
   if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes();if(G.run)G.run.written=[]}
   renderWritten();
@@ -1601,7 +1624,7 @@ function beginSeg(i){
   for(const bb of [G.brain,G.gb]){const base=bb.typical?70:55;bb.dopa=Math.max(bb.dopa,lerp(bb.dopa,base,.8));bb.focus=Math.max(bb.focus,bb.typical?85:60);
     if(bb.shDopa!=null){bb.shDopa=Math.max(bb.shDopa,lerp(bb.shDopa,55,.8));bb.shFocus=Math.max(bb.shFocus,60)}}
   G.sprog=0;G.swall=null;G.sprogUsed=false;
-  $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());
+  $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());document.querySelectorAll('.bub.fly').forEach(e=>e.remove());G.flyEl=null;
   seg.setup();
   G.ents.forEach(e=>{e.px=tc(e.tx);e.py=e.onDesk?e.ty*T+6:tf(e.ty)-4});
   G.clock=hm(seg.t0);
@@ -1624,7 +1647,7 @@ async function endSeg(){
   }finally{ending=false}
 }
 async function timeUp(){
-  const seg=G.seg;G.running=false;
+  const seg=G.seg;G.running=false;if(seg.returnAt)seatAllNow();
   if(seg.onTimeUp){G.running=true;G.clockFrozen=true;await seg.onTimeUp();G.clockFrozen=false;if(G.running&&G.seg===seg)endSeg()}
   else{G.running=true;endSeg()}
 }
@@ -1894,7 +1917,11 @@ function step(dt){
   // 一般人分身
   if(seg.kind==='roam')ghostStep(dt);
   // NPC / 貓
-  for(const n of G.npcs){if(n.wander){n.wt=(n.wt||0)-dt;if(n.wt<=0){n.wt=rand(1.2,2.5);const a=rand(0,6.28);n.vx=Math.cos(a)*18;n.vy=Math.sin(a)*12}
+  for(const n of G.npcs){if(n.path){if(!n.path.length){n.path=null;n.sit=true;n.dir='up';n.moving=false;if(n.seat){n.x=tc(n.seat[0]);n.y=tf(n.seat[1])}}
+      else{const [px,py]=n.path[0],tx=tc(px),ty=tf(py),dx=tx-n.x,dy=ty-n.y,d=Math.hypot(dx,dy),sp=55*dt;
+        if(d<=sp){n.x=tx;n.y=ty;n.path.shift()}else{n.x+=dx/d*sp;n.y+=dy/d*sp}
+        n.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');n.moving=true;n.anim=(n.anim||0)+dt*8}continue}
+    if(n.wander){n.wt=(n.wt||0)-dt;if(n.wt<=0){n.wt=rand(1.2,2.5);const a=rand(0,6.28);n.vx=Math.cos(a)*18;n.vy=Math.sin(a)*12}
       const nx=n.x+n.vx*dt,ny=n.y+n.vy*dt,W=n.wander;
       if(!solidAt(G.map,Math.floor(nx/T),Math.floor(ny/T))&&nx>W[0]&&nx<W[1]&&ny>W[2]&&ny<W[3]){n.x=nx;n.y=ny;n.moving=true;n.dir=Math.abs(n.vx)>Math.abs(n.vy)?(n.vx>0?'right':'left'):(n.vy>0?'down':'up');n.anim=(n.anim||0)+dt*8}else{n.vx*=-1;n.vy*=-1}}
     if(n.orbit){const o=n.orbit;o.ph+=dt*o.sp;const nx=o.cx+Math.cos(o.ph)*o.r,ny=o.cy+Math.sin(o.ph)*o.r*.6;n.dir=Math.abs(nx-n.x)>Math.abs(ny-n.y)?(nx>n.x?'right':'left'):(ny>n.y?'down':'up');n.x=nx;n.y=ny;n.anim=(n.anim||0)+dt*8}}
@@ -1910,7 +1937,9 @@ function step(dt){
   const c={seated:seg.kind==='seat'||G.seated,working:working||G.seated,fidget:fid,walking,boring:!!seg.boring,interesting:(seg.isInteresting?!!seg.isInteresting():(!!seg.interesting&&labOn))||inPlay,dist:seg.dist,restMul:seg.restMul,source:thoughtSource,noThoughts:!!G.qte||seg.kind==='scene'};
   G.brain.update(dt,c);
   G.gb.update(dt,{seated:c.seated,working:seg.kind==='seat',fidget:false,walking:seg.kind==='roam',boring:c.boring,interesting:!!seg.interesting&&labOn,dist:c.dist,restMul:c.restMul,noThoughts:seg.kind==='scene'});
-  if(G.brain.daydream<=0)$('#daydream').style.display='none';
+  if(G.brain.daydream<=0){$('#daydream').style.display='none';if(G.flyEl){G.flyEl.remove();G.flyEl=null}}
+  else if(G.ddSub)$('#ddSub').textContent=G.ddSub+'（'+Math.ceil(G.brain.daydream)+'）';
+  if(seg.returnAt&&!G.returning&&G.clock>=hm(seg.t0)+(hm(seg.t1)-hm(seg.t0))*seg.returnAt){G.returning=true;classmatesReturn();toast(G.brain.hyper?'（遠遠的……大家好像在往哪裡走？）':'同學們陸續走回教室了',G.brain.hyper)}
   if(G.distract){G.distract.t-=dt;if(G.distract.t<=0)G.distract=null}
   seg.tick&&seg.tick(dt);
 }
