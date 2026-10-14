@@ -76,6 +76,14 @@ button{font-family:inherit;cursor:pointer}
 #lab .leaf{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:150px;opacity:.9}
 #lab .pt{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #e0a020;background:rgba(255,230,120,.55);font-size:22px;display:flex;align-items:center;justify-content:center;animation:pulse .8s infinite}
 @keyframes pulse{50%{transform:scale(1.15)}}
+#lab.paper{z-index:7;top:46%;transform:translate(-50%,-50%);height:auto;max-height:72%;overflow:auto;width:min(620px,94%);padding:14px 20px 16px;
+  background:#fffdf5;background-image:repeating-linear-gradient(transparent 0 35px,#e3e8f0 35px 36px);color:#2b2d42}
+#lab.paper .ph{display:flex;justify-content:space-between;font-size:14px;font-weight:800;color:#5d6b8a;border-bottom:2px solid #2f3b55;padding-bottom:4px;margin-bottom:8px}
+#lab.paper #exq{font-size:22px;font-weight:700;line-height:1.7;min-height:76px}
+#lab.paper .po{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+#lab.paper .po button{flex:1 1 140px;min-height:50px;font-size:18px;font-weight:800;border-radius:12px;border:3px solid #2f3b55;background:#fff;color:#2b2d42}
+#lab.paper .po button.sm{flex:0 0 auto;font-size:14px;background:#eef5fb}
+#lab.paper .unk{color:#b05a00;font-size:14px;font-weight:800;margin-top:4px}
 #lab.banner{top:70px;transform:translateX(-50%);height:auto;padding:10px 16px;width:min(380px,82%)}
 #lab.banner #rlTxt{position:static!important;font-size:22px!important}
 #lab .score{position:absolute;left:8px;top:6px;color:#5a3a20;font-weight:800;font-size:16px}
@@ -206,6 +214,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
     <div id="dialog"><div class="who" id="dlgWho"></div><div class="txt" id="dlgTxt"></div><div class="choices" id="dlgCh"></div><div class="more" id="dlgMore">▼ 點一下繼續</div></div>
     <div id="pad"><button class="u" data-dir="up">▲</button><button class="d" data-dir="down">▼</button><button class="l" data-dir="left">◀</button><button class="r" data-dir="right">▶</button></div>
     <button id="actBtn">動作</button>
+    <button id="skipBtn" style="position:absolute;left:50%;top:66px;transform:translateX(-50%);z-index:9;display:none;background:#fffaf0;color:#2f3b55;border:3px solid #2f3b55;border-radius:22px;font-weight:800;font-size:15px;padding:8px 16px;box-shadow:0 3px 0 #2f3b55">✅ 事情都做完了！⏩ 快轉到下一段</button>
     <div id="ver"></div>
   </div>
   <aside id="brain">
@@ -236,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.0';
+const VERSION='v0.4.1';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1073,6 +1082,49 @@ function hookWritten(){
   G.brain.onDone=k=>writtenDone(k);
 }
 
+/* ---------- 自由活動 ---------- */
+const FREE={
+  tv:{icon:'📺',label:'看電視',min:5,trap:1,fx:{dopa:20,mood:4},txt:['卡通正演到精彩的地方','綜藝節目好好笑','新聞在播很奇怪的事件']},
+  cat:{icon:'🐱',label:'摸摸貓',min:2,fx:{mood:8,anx:-10,energy:5},txt:'貓咪呼嚕呼嚕……心情好多了'},
+  lego:{icon:'🧱',label:'玩樂高',min:4,trap:1,fx:{dopa:20,mood:5},txt:'城堡的塔樓蓋好了！'},
+  comic:{icon:'📚',label:'翻漫畫',min:3,trap:1,fx:{dopa:15,mood:3},txt:['主角終於要變身了！','這集好好笑']},
+  fridge:{icon:'🧃',label:'開冰箱找吃的',min:1,fx:{dopa:5,mood:3},txt:['找到一罐養樂多！','冰箱裡什麼都沒有……','偷吃了一塊布丁']},
+  sofa:{icon:'🛋️',label:'躺一下放空',min:5,fx:{energy:20,rest:-30},thoughts:1,txt:'躺著放空……可是腦袋一直冒出念頭'},
+  bed:{icon:'🛏️',label:'再躺一下',min:5,trap:1,fx:{energy:15},txt:'只是想躺五分鐘……'},
+  phone:{icon:'📱',label:'滑一下手機',min:5,trap:1,fx:{dopa:15,mood:2,energy:-3},txt:['朋友貼了好好笑的影片','群組在吵要去哪裡玩']},
+  game:{icon:'🎮',label:'打一場遊戲',min:8,trap:1,fx:{dopa:30,mood:6,energy:-5},txt:'贏了！再一場就好……'},
+  ball:{icon:'⚽',label:'去踢球',min:3,trap:1,fx:{rest:-100,energy:10,dopa:15,mood:6},txt:'跑一跑，身體終於舒服了！'},
+  beetle:{icon:'🪲',label:'蹲下來看獨角仙',min:2,trap:1,fx:{dopa:12,mood:3},txt:'牠的角好帥……'},
+  board:{icon:'📋',label:'看佈告欄',min:1,fx:{dopa:4},txt:['下週校慶要選班服顏色','圖書館新書到了','失物招領：一隻藍色水壺','下個月有健康檢查']},
+  chalk:{icon:'🧽',label:'幫忙擦黑板',min:2,fx:{mood:6,rest:-20},txt:'老師：「謝謝你！」'},
+  plant:{icon:'🪴',label:'看看盆栽',min:1,fx:{mood:2,anx:-4},txt:'葉子上有一隻小瓢蟲'},
+  window:{icon:'🪟',label:'看窗外',min:2,trap:1,fx:{anx:-6,energy:4},txt:'雲慢慢飄過去……'},
+  kids:{icon:'🗣️',label:'跟同學聊天',min:3,trap:1,fx:{mood:8,anx:-3},txt:['聊昨天的卡通','約好放學一起走','有人說了一個超冷的笑話']},
+  coffee:{icon:'☕',label:'泡杯咖啡',min:3,fx:{energy:12,focus:6},txt:'咖啡香……精神好一點了'},
+  snack:{icon:'🍰',label:'吃點心',min:3,fx:{mood:6,dopa:8},txt:'有人帶了蛋糕，好甜'},
+  stretch:{icon:'🙆',label:'站起來伸展',min:2,fx:{rest:-60,energy:8},txt:'肩膀好緊……伸展完舒服多了'},
+  gossip:{icon:'🗣️',label:'聽同事聊八卦',min:5,trap:1,fx:{mood:4,dopa:10},txt:'聽說隔壁部門要換主管了……'},
+  kidplay:{icon:'🦖',label:'陪小樂玩恐龍',min:5,trap:1,fx:{mood:10,anx:-5},txt:'暴龍大戰三角龍！'},
+  water:{icon:'🌱',label:'澆花',min:2,fx:{mood:3,anx:-4},txt:'盆栽冒出新芽了'},
+  book:{icon:'📖',label:'翻小樂的繪本',min:3,fx:{mood:4},txt:'這本小時候好像也看過'},
+};
+const MAP_FREE={home:[['comic',5,3],['fridge',20,3],['sofa',10,6],['bed',3,3]],school:[['board',16,2],['chalk',7,2],['plant',17,10],['window',6,14],['kids',7,5]],
+  office:[['coffee',24,3],['snack',23,6],['stretch',14,2],['board',26,2]],apt:[['sofa',10,7],['fridge',21,3],['water',22,3],['book',6,3]],dorm:[['comic',11,3],['fridge',12,7]]};
+const ENT_FREE={tv:'tv',cat:'cat',lego:'lego',phone:'phone',console:'game',bed:'bed',ball:'ball',beetle:'beetle',chat:'gossip',cake:'snack',kidl:'kidplay'};
+function addFreeActs(){
+  for(const e of G.ents){const k=ENT_FREE[e.id];if(k&&!e.item&&!e.trigger&&!e.talk){e.free=k;e.nointeract=false;e.label=FREE[k].icon+' '+FREE[k].label}}
+  (MAP_FREE[G.map.name]||[]).forEach(([k,x,y],i)=>{if(G.ents.some(e=>e.tx===x&&e.ty===y))return;
+    G.ents.push({id:'free_'+k+'_'+i,name:FREE[k].label,kind:'none',tx:x,ty:y,free:k,label:FREE[k].icon+' '+FREE[k].label})});
+}
+function doFree(e){const f=FREE[e.free];if(!f)return;if(e.cd&&G.segT<e.cd){toast('（剛剛才'+f.label+'過）');return}e.cd=G.segT+15;
+  const b=G.brain;let min=f.min,extra='';
+  if(f.trap&&!b.typical){const real=Math.round(min*rand(1.3,3.2));if(real>min+1){extra='（本來只想 '+min+' 分鐘……結果 '+real+' 分鐘）';min=real}}
+  G.clock+=min;S().freeMin=(S().freeMin||0)+min;S().freeCount=(S().freeCount||0)+1;
+  for(const k in f.fx)b[k]=clamp(b[k]+f.fx[k],0,100);
+  if(f.thoughts){b.spawn({source:thoughtSource});b.spawn({source:thoughtSource})}
+  Sound.pop();toast(f.icon+' '+(Array.isArray(f.txt)?pick(f.txt):(f.txt||f.label))+(extra?'　'+extra:''));if(extra)inner('時間跑去哪了？');
+}
+
 /* ---------- 共用小工具 ---------- */
 function wallNeed(){const b=G.brain;return b.typical?.4:clamp(1.2+(65-b.dopa)/14,1,5.5)/(sup('med')?1.6:1)}
 function wallWork(dt,rate){
@@ -1105,6 +1157,7 @@ async function diagnosisEvent(fn){
 const yes=v=>v?'✅':'❌';
 function commonRows(s,b,g){const r=[['被念頭拉走',s.hijacks+' 次','0 次'],['忘掉的便利貼',s.lost+' 張','0 張'],['被罵／被唸',s.scold+' 次','0 次'],['一天結束的心情',Math.round(b.mood)+' / 100','約 75 / 100']];
   if(s.masked>0||b.anx>=25)r.push(['硬忍住沒被發現',s.masked+' 次','—'],['累積的焦慮',Math.round(b.anx)+' / 100','約 5 / 100']);
+  if(s.freeCount)r.push(['自由活動',s.freeCount+' 次（共 '+s.freeMin+' 分鐘）','—']);
   r.push(['一天結束的精神力',(s.energyEnd!=null?s.energyEnd:Math.round(b.energy))+' / 100','約 80 / 100']);return r}
 function baseStats(){return{scold:0,hijacks:0,lost:0,masked:0,peeks:0,overflow:0,phoneMin:0}}
 
@@ -1122,12 +1175,14 @@ const EXAM_B=[
   {lines:['Amy gets up at six.','She eats breakfast at seven.','She goes to school at eight.'],info:1,q:'When does Amy eat breakfast?',o:['six','seven','eight'],a:1},
   {q:'How ___ you?',o:['is','am','are'],a:2,k:1},
 ];
+function garble(str,seed){const G_='#%&@?*~▯ӂʘ';let o='';for(let i=0;i<str.length;i++){const c=str[i];o+=/[A-Za-z]/.test(c)?G_[(c.charCodeAt(0)*7+i*13+seed)%G_.length]:c}return o}
 function examSkipP(){const b=G.brain;return b.typical?0:clamp(.04+(60-b.focus)/250,.02,.25)}
-function buildQ(q,careful){
+function buildQ(q,careful,unk){
   const U=[];const words=t=>/\s/.test(t)?t.split(' ').map(w=>w+' '):[t];
   if(q.lines)q.lines.forEach((ln,li)=>words(ln).forEach(w=>U.push({text:w,line:li})));
   const ql=q.lines?q.lines.length:0;
   if(q.t)q.t.forEach((w,wi)=>U.push({text:w,line:ql,key:wi===q.key}));else words(q.q).forEach(w=>U.push({text:w,line:ql}));
+  if(unk)U.forEach((u,i)=>u.text=garble(u.text,i*5+3));
   const sk=examSkipP()*(careful?.5:1);
   if(q.lines)for(let li=1;li<q.lines.length;li++)if(Math.random()<sk*1.3)U.filter(u=>u.line===li).forEach(u=>u.skip=true);
   return{U,cursor:0,t:0,next:.25,lines:ql+1};
@@ -1174,25 +1229,28 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  },
  {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
   card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
-  setup(){schoolBase();sitPlayer();const unk=clamp((105-G.save.iq)/70,0,.45);
+  setup(){schoolBase();sitPlayer();const unk=clamp((115-G.save.iq)/60,0,.6);
    const mark=list=>list.map(q=>q.k&&Math.random()<unk);
    G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F),back:mark(EXAM_B)},cur:null};this.newQ()},
-  newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful):null},
-  bar(){const E=G.ex;
-   if(E.submitted)return `<div class="lbl">交卷了。等鐘響……</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`;
-   const list=E.side==='front'?EXAM_F:EXAM_B;
-   if(E.i>=list.length){
-     if(E.side==='front')return `<div class="lbl">正面寫完了！</div><div class="row"><button class="big" data-act="submit">📄 交卷</button><button data-act="flip" style="min-width:52px;font-size:13px;opacity:.7">↻</button><button data-hold="fidget">🌀 轉筆</button></div>`;
-     return `<div class="lbl">背面也寫完了！</div><div class="row"><button class="big" data-act="submit">📄 交卷</button><button data-hold="fidget">🌀 轉筆</button></div>`}
-   const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
-   return `<div class="lbl">${E.side==='front'?'正面':'背面'}・第 ${E.i+1} 題${unk?'　<span style="color:#ffd66b">（這題好像沒學會……只能用猜的）</span>':''}</div>
-    <div id="exq" style="background:#fffaf0;color:#2b2d42;border-radius:12px;padding:8px 12px;margin:0 auto 8px;max-width:520px;font-size:17px;font-weight:700;line-height:1.5;min-height:34px;text-align:left"></div>
-    <div class="row">${q.o.map((o,k)=>`<button data-act="ans" data-v="${k}" style="${unk?'filter:blur(4px)':''}">${esc(o)}</button>`).join('')}<button data-act="reread" style="font-size:14px">🔁 再讀一次</button><button data-hold="fidget">🌀</button></div>`},
+  newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
+  renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
+   const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
+   let body;
+   if(E.submitted)body='<div style="font-size:20px;font-weight:800;text-align:center;padding:20px">交卷了。等鐘響……</div>';
+   else if(E.i>=list.length)body=E.side==='front'
+     ?'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button><button data-act="flip" class="sm" style="opacity:.6">↻</button></div>'
+     :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">背面也寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button></div>';
+   else{const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
+     body='<div id="exq"></div>'+(unk?'<div class="unk">（這題好像沒學會……字看起來像亂碼，只能用猜的）</div>':'')
+       +'<div class="po">'+q.o.map((o,k)=>'<button data-act="ans" data-v="'+k+'">'+esc(unk?garble(o,k*11+7):o)+'</button>').join('')+'<button data-act="reread" class="sm">🔁 再讀一次</button></div>'}
+   el.innerHTML=head+body;bindHoldButtons(el);renderExq()},
+  bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。題目讀過的字會淡掉、有時會跳字跳行。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
   async begin(){if(S().late){toast('（遲到了，比別人少寫五分鐘）');G.clock+=5}
    await say('監考老師','英文段考開始。考卷有正反兩面，寫完要檢查。');
+   $('#lab').className='paper';$('#lab').style.display='block';this.renderPaper();
    const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(L)},
   act(a,v){const E=G.ex,b=G.brain;if(b.daydream>0){toast('（腦袋飄走了，看不清題目）');return}
-   if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;G.clock+=1;this.newQ(true);toast('🔁 從頭再讀一次');return}
+   if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;G.clock+=1;this.newQ(true);toast('🔁 從頭再讀一次');this.renderPaper();return}
    if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;const q=list[E.i],C=E.cur;
      let ok=+v===q.a;
      if(ok&&b.focus<45&&Math.random()<.25){ok=false;S().careless++}
@@ -1209,7 +1267,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
        if(!u.skip)u.at=G.segT;C.cursor++;C.next=C.t+(u.skip?0:.12+u.text.length*.05)}}
    renderExq()},
   onOverflow(){scold('監考老師','{name}，考試中不要一直動來動去、東張西望！')},
-  finish(){const E=G.ex;S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
+  finish(){$('#lab').style.display='none';$('#lab').className='';const E=G.ex;S().exam=Math.round((E.front.filter(x=>x).length+E.back.filter(x=>x).length)/9*100)},
   bot(){const E=G.ex;if(E.submitted||G.brain.daydream>0)return;const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i<list.length){if(E.cur&&E.cur.cursor<E.cur.U.length)return;return this.act('ans',String(list[E.i].a))}if(E.side==='front'&&Math.random()<.5)return this.act('flip');this.act('submit')},
  },
  {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,returnAt:.8,title:'下課 10 分鐘',
@@ -1587,6 +1645,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    if(sp.on){sp.t+=dt;pot.kind='steam';if(sp.t>=32){sp.on=false;sp.burnt=true;pot.kind='smoke';Sound.tone(2000,.15,'square',.1);Sound.tone(2000,.15,'square',.1,.3);Sound.tone(2000,.15,'square',.1,.6);toast('🔥 湯燒焦了！煙霧警報器狂響！');G.brain.mood=clamp(G.brain.mood-8,0,100)}}
    else if(!sp.burnt)pot.kind='none';
    if(!w.ready){w.t+=dt;if(w.t>=25){w.ready=true;Sound.tone(1200,.12,'square',.08);Sound.tone(1200,.12,'square',.08,.2);Sound.tone(1200,.12,'square',.08,.4);toast('嗶嗶嗶～洗衣機洗好了')}}},
+  skipCheck(){const sp=G.soup;return (sp.done||sp.burnt)&&G.wash.done&&S().khw},
   onTimeUp(){if(G.soup.on){G.soup.on=false;G.soup.burnt=true;toast('🔥 湯燒乾了……')}},
   finish(){const s=S();s.burnt=G.soup.burnt;s.soupOk=G.soup.done&&!G.soup.burnt},
   bot(){const sp=G.soup;if(!sp.on&&!sp.done&&!sp.burnt){botGo('stove');return}if(!S().khw&&botGo('kidhw'))return;if(G.wash.ready&&!G.wash.done&&botGo('washer'))return;if(sp.on&&sp.t>=13){botGo('stove');return}},
@@ -1692,6 +1751,7 @@ function beginSeg(i){
   G.brain.energy=clamp(G.brain.energy+40,0,100);
   $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());document.querySelectorAll('.bub.fly').forEach(e=>e.remove());G.flyEl=null;
   seg.setup();
+  if(seg.kind==='roam')addFreeActs();
   G.ents.forEach(e=>{e.px=tc(e.tx);e.py=e.onDesk?e.ty*T+6:tf(e.ty)-4});
   G.clock=hm(seg.t0);
   setStageMode(seg.kind);refreshBar();
@@ -1729,7 +1789,7 @@ function iqText(stage,iq){
     :`IQ 管的是理解，ADHD 卡的是自我管理。沒有人幫你安排的大人生活，是 ADHD 最大的挑戰。`;
 }
 function genderText(stage,g,s,b){
-  const O=G.save.outward,style=O>=.6?'比較外顯':O<=.4?'比較內隱':'介於外顯和內隱之間';
+  const O=G.save.outward,style='外顯程度 '+Math.round(O*100)+'%（'+(O>=.6?'比較外顯':O<=.4?'比較內隱':'介於外顯和內隱之間')+'）';
   const base=`這次你的角色${style}。研究上，男生的 ADHD 平均比較常「看得見」（坐不住、衝動），女生平均比較常「看不見」（發呆、拼命偽裝）——但這只是群體傾向：女生也可能很衝動，男生也可能默默硬忍。`;
   if(stage==='kid')return base+(O<.5?`你今天硬忍住了 ${s.masked} 次，沒人發現，焦慮累積到 ${Math.round(b.anx)}。越會忍的孩子，越容易被漏掉。`:'外顯的孩子常被罵，但也比較早被大人注意到。');
   if(stage==='teen')return base+(O<.5?'青春期越會偽裝，大人越容易把你看成「焦慮」「情緒化」，ADHD 反而被漏掉。':'外顯的青少年常因衝突、違規被注意到，容易被貼上「問題學生」的標籤。');
@@ -1825,7 +1885,7 @@ function createScreen(){
   const gDesc=g=>g==='M'?'研究上，男生的 ADHD 平均比較常「外顯」：坐不住、衝動、插話——常被罵，但比較早被發現。':'研究上，女生的 ADHD 平均比較常「內隱」：發呆、拼命偽裝成沒事——比較晚被發現，常伴隨焦慮。';
   screen(`<div class="scr"><h2>建立你的角色</h2>
    <div class="field"><label>名字</label><input type="text" id="cName" maxlength="8" value="小安"></div>
-   <div class="field"><label>性別</label><div class="seg2"><button id="gM" class="on">男生</button><button id="gF">女生</button></div><div class="desc" id="gD"></div><div style="font-size:12px;color:var(--sub);margin-top:4px">※ 這只是群體傾向。每個角色會隨機帶一點自己的個性：女生也可能很衝動，男生也可能默默硬忍。</div></div>
+   <div class="field"><label>性別</label><div class="seg2"><button id="gM" class="on">男生</button><button id="gF">女生</button></div><div class="desc" id="gD"></div><div style="font-size:12px;color:var(--sub);margin-top:4px">※ 這只是群體傾向。開始後會隨機決定這個角色的「外顯程度」（0～100%）：越高越容易坐不住、衝口而出；越低越會默默硬忍。女生也可能很外顯，男生也可能很內隱。你可以在人生地圖和大腦畫面看到數值。</div></div>
    <div class="field"><label>IQ：<span id="iqV">100</span></label><input type="range" id="cIQ" min="80" max="140" step="1" value="100"><div class="desc" id="iqD"></div></div>
    <div class="field"><label>ADHD 類型</label><div class="desc">混合型（注意力不足 ＋ 過動衝動）</div></div>
    <button class="mbtn pri" id="cGo">開始人生</button><button class="mbtn" id="back">返回</button></div>`);
@@ -1849,7 +1909,7 @@ function lifeMap(){
     return `<div class="lnode ${done?'done ':''}${open?'open':'lock'}" data-id="${c.id}"><div class="i">${c.icon}</div><b>${c.name}</b><div class="a">${c.age}</div><div style="font-size:12px;margin-top:4px">${st}</div></div>`}).join('<div style="align-self:center;color:var(--sub)">→</div>');
   const dxc=sv.flags.diagnosed?CHAPTERS.find(c=>c.id===sv.flags.diagnosed):null;
   const dx=dxc?'🩺 已確診（'+dxc.name+'・'+dxc.age+'）':'🔍 尚未確診';
-  const sty=sv.outward>=.6?'比較外顯':sv.outward<=.4?'比較內隱':'外顯／內隱各半';
+  const sty='外顯程度 '+Math.round(sv.outward*100)+'%，'+(sv.outward>=.6?'比較外顯':sv.outward<=.4?'比較內隱':'介於兩者之間');
   screen(`<div class="scr"><h2>${esc(sv.name)} 的人生地圖</h2><p>${sv.gender==='M'?'男':'女'}・IQ ${sv.iq}・ADHD 混合型（${sty}）・${dx}</p>
    <div class="life">${nodes}</div>
    ${sv.completed.includes('family')?'<button class="mbtn pri" id="recap">🌅 人生回顧</button>':''}
@@ -1921,6 +1981,7 @@ document.querySelectorAll('#pad [data-dir]').forEach(b=>{const k=b.dataset.dir;
 $('#actBtn').addEventListener('pointerdown',e=>{e.preventDefault();if(G.dlg){advanceDlg();return}interact()});
 $('#hudClock').addEventListener('click',()=>{if(!G.running)return;G.peek=3;S().peeks++});
 $('#btnCmp').addEventListener('click',toggleCompare);
+$('#skipBtn').addEventListener('click',()=>{if(G.running&&!G.dlg){G.fast=true;$('#skipBtn').style.display='none'}});
 $('#btnMenu').addEventListener('click',pauseMenu);
 $('#btnFull').addEventListener('click',()=>{
   const d=document,el=d.documentElement;
@@ -1939,6 +2000,7 @@ function nearestInteract(){
 }
 function interact(){
   if(!G.running||G.paused||G.dlg)return;const e=nearestInteract();if(!e)return;
+  if(e.free){doFree(e);return}
   if(e.item){e.gone=true;G.run.bag[e.id]=true;const had=G.brain.completeNote(e.id);Sound.good();toast('拿到「'+e.name+'」');if(!had)inner('啊！這個也要帶！差點忘了');return}
   G.seg.onTalk&&G.seg.onTalk(e);
 }
@@ -2124,7 +2186,8 @@ function updateBrainUI(dt){
   }
   cloud.querySelectorAll('.bub:not(.pop)').forEach(el=>{if(!seen.has(el.dataset.id))el.remove()});
   uiAcc+=dt;if(uiAcc<.1)return;uiAcc=0;
-  $('#bpInfo').textContent=`ADHD 混合型・${G.save.gender==='M'?'男':'女'}・IQ ${G.save.iq}`;
+  $('#skipBtn').style.display=(G.running&&G.seg&&G.seg.skipCheck&&!G.fast&&G.seg.skipCheck())?'block':'none';
+  $('#bpInfo').textContent=`ADHD 混合型・${G.save.gender==='M'?'男':'女'}・IQ ${G.save.iq}・外顯 ${Math.round((G.save.outward||.5)*100)}%`;
   renderNotes($('#notesMe'),b,false);$('#capMe').textContent='格數 '+b.memCap;
   renderMeters($('#metersMe'),b);
   const med=sup('med');$('#colMe .ctitle').textContent='你（ADHD）'+(med?'　💊 藥效中':'');
