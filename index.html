@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>我的ADHD人生</title>
+<meta name="author" content="蕭妤真">
+<meta name="copyright" content="© 2026 蕭妤真. All rights reserved.">
 <style>
 :root{
   --bg:#1b1f30; --panel:#22273a; --panel2:#2a3048; --line:#3b4363; --navy:#2f3b55; --cream:#fffaf0; --text:#e8efe9; --sub:#a9b8b0;
@@ -146,6 +148,26 @@ button{font-family:inherit;cursor:pointer}
 .gprog{font-size:12px;color:var(--cyan);margin-top:4px}
 /* ---- screens ---- */
 #screen{position:fixed;inset:0;z-index:50;background:rgba(14,18,16,.97);overflow-y:auto;display:none;padding:20px 16px 40px}
+#screen.title{background:linear-gradient(#9fd3f2 0%,#cfeaf7 55%,#e9f6ea 100%);padding:0}
+.tw{min-height:100%;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;padding:26px 16px 18px}
+.tw .cl{position:absolute;background:#fff;border-radius:40px;opacity:.85;animation:drift 40s linear infinite}
+.tw .cl:before,.tw .cl:after{content:'';position:absolute;background:#fff;border-radius:50%}
+.tw .cl:before{width:55%;height:150%;left:15%;top:-60%}.tw .cl:after{width:40%;height:120%;right:12%;top:-40%}
+@keyframes drift{from{transform:translateX(-30vw)}to{transform:translateX(110vw)}}
+.tw h1{position:relative;font-size:clamp(38px,9vw,64px);margin:18px 0 4px;color:#fffaf0;letter-spacing:3px;
+  text-shadow:0 4px 0 #2f3b55,4px 0 0 #2f3b55,-4px 0 0 #2f3b55,0 -4px 0 #2f3b55,4px 4px 0 #2f3b55,-4px 4px 0 #2f3b55,4px -4px 0 #2f3b55,-4px -4px 0 #2f3b55,0 9px 0 rgba(47,59,85,.35)}
+.tw h1 b{color:#ffd66b}
+.tw .st{position:relative;font-size:18px;font-weight:800;color:#2f3b55;background:#fffaf0;border:3px solid #2f3b55;border-radius:20px;padding:4px 16px;box-shadow:0 3px 0 #2f3b55}
+.tw .stage{position:relative;width:min(560px,100%);height:150px;margin:18px 0 6px}
+.tw .stage canvas{position:absolute;left:0;bottom:0;width:100%;height:100%;image-rendering:pixelated}
+.tw .tb{position:absolute;background:#fff;color:#2f3b55;font-size:12px;font-weight:800;border-radius:12px;padding:3px 8px;border:2px solid #2f3b55;white-space:nowrap;animation:tbub 4.5s ease-in-out infinite;opacity:0}
+@keyframes tbub{0%{opacity:0;transform:translateY(8px)}15%{opacity:1;transform:translateY(0)}70%{opacity:1}100%{opacity:0;transform:translateY(-14px)}}
+.tw .tbtn{position:relative;display:block;width:min(400px,100%);margin:9px auto;min-height:54px;font-size:19px;font-weight:800;border-radius:28px;border:3px solid #2f3b55;background:#fffaf0;color:#2f3b55;box-shadow:0 4px 0 #2f3b55;cursor:pointer}
+.tw .tbtn.pri{background:#ffd66b}
+.tw .tbtn:active{transform:translateY(3px);box-shadow:0 1px 0 #2f3b55}
+.tw .tbtn:disabled{opacity:.45;cursor:default}
+.tw .copy{position:relative;margin-top:auto;padding-top:22px;font-size:13px;color:#2f3b55;font-weight:700;text-align:center;opacity:.85}
+.copyline{font-size:12px;color:var(--sub);text-align:center;margin-top:14px}
 .scr{max-width:720px;margin:0 auto}
 .scr h1{font-size:40px;margin:30px 0 4px;text-align:center;color:var(--accent);letter-spacing:2px}
 .scr h2{font-size:24px;margin:10px 0 12px;color:var(--accent)}
@@ -245,7 +267,8 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.5.6';
+const VERSION='v0.6.0';
+const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1943,22 +1966,36 @@ const SCIENCE=[
   '🔦 <b>超專注</b><br><b>遊戲裡：</b>有興趣時，念頭全部消失，連鐘聲都聽不太到。<br><b>現實中：</b>研究發現 ADHD 症狀和較多「超專注」經驗有關，但不是每個人都有，也不能拿來診斷。（<a href="https://pubmed.ncbi.nlm.nih.gov/30267329/" target="_blank" rel="noopener">Hupfeld 等 2019</a>）',
   '🧰 <b>支持不用等診斷</b><br>寫下來、拆小步驟、安靜的位置、允許動一動——這些生活上的調整，大人不必等正式診斷就可以先做。藥物則一定要醫師評估。（<a href="https://www.nice.org.uk/guidance/ng87/chapter/Recommendations" target="_blank" rel="noopener">NICE NG87</a>）',
 ];
-const DISCLAIMER='⚠️ 本遊戲是簡化的體驗，用來幫助理解，不是醫學工具。每個 ADHD 的人感受都不一樣，也不能用這個遊戲自我診斷。如果有疑問，請洽詢兒童心智科、身心科，或學校輔導室。';
+const DISCLAIMER='⚠️ 本遊戲是簡化的體驗，用來幫助理解，不是醫學工具。每個 ADHD 的人感受都不一樣，也不能用這個遊戲自我診斷。如果有疑問，請洽詢兒童心智科、身心科，或學校輔導室。<br>'+COPYRIGHT+'。';
 
 /* ================= 畫面（選單） ================= */
-function screen(html){const s=$('#screen');s.innerHTML=html;s.style.display='block';s.scrollTop=0}
+function screen(html,cls){const s=$('#screen');s.className=cls||'';s.innerHTML=html;s.style.display='block';s.scrollTop=0}
 function hideScreen(){$('#screen').style.display='none'}
 function titleScreen(){
   G.running=false;
   const any=[1,2,3].some(i=>Save.load(i));
-  screen(`<div class="scr"><h1>我的ADHD人生</h1><div class="subt">換一顆大腦，過一次人生</div>
-  <button class="mbtn pri" id="tNew">開始新的人生</button>
-  <button class="mbtn" id="tLoad" ${any?'':'disabled'}>繼續（讀取存檔）</button>
-  <button class="mbtn" id="tAbout">關於 ADHD 與這個遊戲</button>
-  <p style="text-align:center;font-size:12px;color:var(--sub);margin-top:30px">${VERSION}</p></div>`);
+  const clouds=[[8,14,90,26,0],[60,22,120,32,-14],[30,38,70,20,-26]].map(([t,l,w,h,d])=>`<div class="cl" style="top:${t}%;left:0;width:${w}px;height:${h}px;animation-delay:${d}s"></div>`).join('');
+  const bubs=[['我要帶什麼？',4,0],['再五分鐘就好…',25,1.1],['截止日是哪天？',47,2.2],['鑰匙呢？？',68,3.3]].map(([t,l,d])=>`<div class="tb" style="left:${l}%;top:4px;animation-delay:${d}s">💭 ${t}</div>`).join('');
+  screen(`<div class="tw">${clouds}
+   <h1>我的<b>ADHD</b>人生</h1><div class="st">換一顆大腦，過一次人生</div>
+   <div class="stage"><canvas id="ttlCv" width="140" height="38"></canvas>${bubs}</div>
+   <button class="tbtn pri" id="tNew">▶ 開始新的人生</button>
+   <button class="tbtn" id="tLoad" ${any?'':'disabled'}>📂 繼續（讀取存檔）</button>
+   <button class="tbtn" id="tAbout">🧠 關於 ADHD 與這個遊戲</button>
+   <div class="copy">${COPYRIGHT}<br><span style="font-weight:400">${VERSION}</span></div></div>`,'title');
+  drawTitleScene();
   $('#tNew').onclick=()=>{Sound.init();slotScreen('new')};
   $('#tLoad').onclick=()=>{Sound.init();slotScreen('load')};
   $('#tAbout').onclick=aboutScreen;
+}
+function drawTitleScene(){const cv=$('#ttlCv');if(!cv)return;const c=cv.getContext('2d');c.imageSmoothingEnabled=false;
+  // 草地
+  R(c,'#a3d67f',0,26,140,12);for(let x=0;x<140;x+=7)R(c,'#8fc76b',x+(x*3)%5,27+(x%3),2,1);R(c,'#7ab25a',0,26,140,1);
+  // 一生：國小 → 中學 → 大學 → 工作 → 和孩子
+  const ppl=[[12,LOOKS.meM],[40,{...LOOKS.meF,teen:true}],[68,{...LOOKS.meM,adult:true}],[96,{...LOOKS.meF,adult:true}],[124,{...LOOKS.meM,adult:true}],[133,LOOKS.child]];
+  ppl.forEach(([x,L])=>drawChar(c,x,33,L,{dir:'down'}));
+  // 小箭頭
+  [[25,22],[53,22],[81,22],[109,22]].forEach(([x,y])=>{R(c,'#2f3b55',x,y,4,1);R(c,'#2f3b55',x+3,y-1,1,3)});
 }
 function slotScreen(mode){
   const html=[1,2,3].map(i=>{const d=Save.load(i);
@@ -2023,7 +2060,7 @@ function aboutScreen(){
   <p>ADHD（注意力不足過動症）是一種大腦發展上的差異，影響專注、衝動控制和自我管理。它不是懶惰、不是教養問題，也和聰不聰明無關。</p>
   <p>在這個遊戲裡，你會帶著一顆 ADHD 大腦，從國小走到成家。右側的「大腦即時畫面」會讓你看見：同一件小事，對不同的大腦來說，難度可能完全不一樣。</p>
   <h3>大腦小卡</h3>${SCIENCE.map(c=>`<div class="card">${c}</div>`).join('')}
-  <div class="disc">${DISCLAIMER}</div><button class="mbtn" id="back">返回</button></div>`);
+  <div class="disc">${DISCLAIMER}</div><button class="mbtn" id="back">返回</button><div class="copyline">${COPYRIGHT}。未經授權，請勿轉載、改作或作商業使用。</div></div>`);
   $('#back').onclick=titleScreen;
 }
 function pauseMenu(){
