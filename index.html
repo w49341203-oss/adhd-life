@@ -74,6 +74,8 @@ button{font-family:inherit;cursor:pointer}
 #lab .leaf{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:150px;opacity:.9}
 #lab .pt{position:absolute;width:48px;height:48px;margin:-24px 0 0 -24px;border-radius:50%;border:3px solid #e0a020;background:rgba(255,230,120,.55);font-size:22px;display:flex;align-items:center;justify-content:center;animation:pulse .8s infinite}
 @keyframes pulse{50%{transform:scale(1.15)}}
+#lab.banner{top:70px;transform:translateX(-50%);height:auto;padding:10px 16px;width:min(380px,82%)}
+#lab.banner #rlTxt{position:static!important;font-size:22px!important}
 #lab .score{position:absolute;left:8px;top:6px;color:#5a3a20;font-weight:800;font-size:16px}
 /* ---- QTE ---- */
 #qte{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);z-index:12;display:none;width:min(420px,88%);
@@ -125,6 +127,10 @@ button{font-family:inherit;cursor:pointer}
 .meter .b i{display:block;height:100%;width:0;transition:width .2s}
 .meter .v{width:26px;text-align:right;font-variant-numeric:tabular-nums}
 .inner{margin-top:6px;font-size:13px;color:#f3e3b8;min-height:20px;font-style:italic}
+.wl{background:#f4f7fb;border-radius:8px;padding:6px 8px;margin-bottom:6px}
+.wl .wt{font-size:12px;color:#5d6b8a;font-weight:700;margin-bottom:3px}
+.wl button{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px dashed #c9d1d8;color:#2b2d42;font-size:13px;font-weight:700;padding:6px 2px;min-height:34px}
+.wl button.done{color:#8a98ac;text-decoration:line-through}
 .gprog{font-size:12px;color:var(--cyan);margin-top:4px}
 /* ---- screens ---- */
 #screen{position:fixed;inset:0;z-index:50;background:rgba(14,18,16,.97);overflow-y:auto;display:none;padding:20px 16px 40px}
@@ -205,6 +211,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
         <div class="cloud" id="cloudMe"><span class="cl">念頭泡泡（點一下丟掉）</span><div class="hyper" id="hyperMe">🔦 超專注中<br>其他念頭全部消失了……<br>連鐘聲都聽不太到</div></div>
         <div class="mlabel"><span>📝 便利貼（工作記憶）</span><span id="capMe"></span></div>
         <div class="notes" id="notesMe"></div>
+        <div id="writtenMe"></div>
         <div id="metersMe"></div>
         <div class="inner" id="innerMe"></div>
       </section>
@@ -223,7 +230,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3.1';
+const VERSION='v0.3.3';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -452,6 +459,7 @@ class Brain{
   get masking(){return !this.typical&&this.g==='F'}
   emit(t,d){try{this.on(t,d)}catch(e){console.error(e)}}
   addNotes(list){
+    if(this.onAdd)this.onAdd(list);
     const dropped=[];
     for(const it of list){
       if(this.notes.some(n=>n.key===it.key&&!n.done)){continue}
@@ -462,7 +470,7 @@ class Brain{
     return dropped;
   }
   hasNote(k){return this.notes.some(n=>n.key===k&&!n.done)}
-  completeNote(k){const n=this.notes.find(n=>n.key===k&&!n.done);if(n){n.done=true;n.doneT=.9}return !!n}
+  completeNote(k){if(this.onDone)this.onDone(k);const n=this.notes.find(n=>n.key===k&&!n.done);if(n){n.done=true;n.doneT=.9}return !!n}
   clearNotes(){this.notes=[]}
   refresh(id){const n=this.notes.find(n=>n.id===id);if(!n||n.done||n.cd>0)return false;n.life=Math.min(1,n.life+.45);n.cd=6;this.focus=Math.max(0,this.focus-3);return true}
   rate(c){
@@ -617,8 +625,20 @@ function seatClassmates(){
   }
   return arr;
 }
-function schoolBase(){
-  G.npcs=seatClassmates();
+function freeClassmates(){
+  const looks=[LOOKS.kid1,LOOKS.kid2,LOOKS.kid3,LOOKS.kid4,LOOKS.kid5],teen=G.chapter&&G.chapter.stage==='teen',m=getMap('school'),arr=[];let i=0;
+  const add=(tx,ty,area,still,dir)=>{if(solidAt(m,tx,ty))return;const L=looks[(i++)%5];arr.push({x:tc(tx),y:tf(ty),look:teen?{...L,teen:true}:L,dir:dir||'down',wander:still?null:area})};
+  const cls=[tc(1),tc(18),tf(2),tf(10)],cor=[tc(1),tc(38),tf(14),tf(15)];
+  // 教室裡：有人走來走去、有人兩兩聊天
+  [[4,4],[13,4],[16,8],[2,10]].forEach(([x,y])=>add(x,y,cls));
+  add(7,4,cls,true,'right');add(8,4,cls,true,'left');add(13,10,cls,true,'right');add(14,10,cls,true,'left');
+  // 走廊上
+  [[6,14],[14,15],[22,14],[33,15]].forEach(([x,y])=>add(x,y,cor));
+  add(19,15,cor,true,'right');add(20,15,cor,true,'left');
+  return arr;
+}
+function schoolBase(free){
+  G.npcs=free?freeClassmates():seatClassmates();
   G.npcs.push({id:'teacher',x:tc(10)-8,y:tf(2),look:LOOKS.teacher,dir:'down'});
 }
 function playgroundKids(){
@@ -736,7 +756,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 {id:'recess',map:'school',kind:'roam',t0:'09:30',t1:'09:40',real:55,dist:1.2,title:'下課 10 分鐘',
  card:'上廁所、裝水，鐘響前回到座位。',pool:['福利社有沒有新零食？','走廊可以滑一下嗎？','等一下是什麼課？'],
  setup(){
-   schoolBase();standPlayer(7,8);playgroundKids();
+   schoolBase(true);standPlayer(7,8);playgroundKids();
    G.ents.push(
      {id:'toilet',name:'廁所',kind:'none',tx:5,ty:19,label:'上廁所'},
      {id:'fountain',name:'飲水機',kind:'none',tx:24,ty:15,label:'裝水'},
@@ -804,7 +824,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 {id:'home2',map:'school',kind:'roam',t0:'15:50',t1:'16:05',real:60,dist:1.3,title:'放學',keepNotes:true,
  card:'老師在交代明天的事。',pool:['今天晚餐吃什麼？','回家要先玩還是先寫功課？'],
  setup(){
-   schoolBase();standPlayer(7,8);
+   schoolBase(true);standPlayer(7,8);
    G.ents.push(
      {id:'notice',name:'通知單',kind:'paper',tx:8,ty:7,item:true,onDesk:true},
      {id:'hw2',name:'數學作業本',kind:'hw',tx:8,ty:11,item:true,onDesk:true,label:'從置物櫃拿作業本'},
@@ -963,7 +983,7 @@ function buildApt(){const m=newMap(24,14,'#');room(m,0,0,24,14,'.');
 
 /* ---------- 輔助策略（確診後才能用） ---------- */
 const SUPPORTS=[
-  {id:'list',icon:'📋',name:'寫下來（檢查清單）',desc:'幫大腦外接一塊白板：便利貼多一格，而且褪色慢很多。',mods:{capPlus:1,decayMul:.35}},
+  {id:'list',icon:'📋',name:'寫下來（檢查清單）',desc:'別人交代的事都會寫在大腦畫面的「清單」上。忘了，點一下看一眼就想起來。'},
   {id:'timer',icon:'⏰',name:'計時器＋鬧鐘',desc:'時鐘永遠看得清楚，時間快到時會響。',},
   {id:'quiet',icon:'🎧',name:'安靜環境（手機放遠）',desc:'念頭泡泡少 40%，手機不會一直把你吸走。',mods:{thoughtMul:.6}},
   {id:'move',icon:'🏃',name:'規律運動＋允許動一動',desc:'坐不住累積得慢 40%。',mods:{restMul:.6}},
@@ -983,6 +1003,23 @@ function supportScreen(go){
    document.querySelectorAll('[data-s]').forEach(el=>el.onclick=()=>{const id=el.dataset.s;if(picked.includes(id))picked=picked.filter(x=>x!==id);else if(picked.length<3)picked.push(id);else{toastScr('最多選 3 個');return}render()});
    $('#sGo').onclick=()=>{G.run.supports=picked.slice();go()}};
   render();
+}
+
+/* ---------- 寫下來的清單（📋策略、上課抄筆記） ---------- */
+function addWritten(list){const W=G.run.written||(G.run.written=[]);let added=false;
+  for(const it of list){if(!W.some(w=>w.key===it.key)){W.push({key:it.key,text:it.text,done:false});added=true}}
+  if(added)renderWritten();return added}
+function writtenDone(k){const w=(G.run.written||[]).find(w=>w.key===k);if(w&&!w.done){w.done=true;renderWritten()}}
+function renderWritten(){const el=$('#writtenMe');if(!el)return;const W=(G.run&&G.run.written)||[];
+  if(!W.length){el.innerHTML='';return}
+  el.innerHTML='<div class="wl"><div class="wt">📒 寫下來的（忘了就點一下看一眼）</div>'+W.map(w=>'<button data-k="'+esc(w.key)+'" class="'+(w.done?'done':'')+'">'+(w.done?'✅ ':'▫️ ')+esc(w.text)+'</button>').join('')+'</div>';
+  el.querySelectorAll('button[data-k]').forEach(b=>b.addEventListener('pointerdown',e=>{e.preventDefault();if(!G.running||G.paused||G.dlg)return;
+    const w=W.find(x=>x.key===b.dataset.k);if(!w||w.done)return;
+    if(G.brain.hasNote(w.key)){toast('（這件事你還記得）');return}
+    G.brain.addNotes([{key:w.key,text:w.text}]);Sound.blip();toast('📒 看了一眼：'+w.text)}))}
+function hookWritten(){
+  G.brain.onAdd=list=>{if(sup('list'))addWritten(list)};
+  G.brain.onDone=k=>writtenDone(k);
 }
 
 /* ---------- 共用小工具 ---------- */
@@ -1078,7 +1115,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  },
  {id:'mrecess',map:'school',kind:'roam',t0:'10:00',t1:'10:10',real:55,dist:1.2,title:'下課 10 分鐘',
   card:'要把作業交到講台、去上廁所，鐘響前回座位。',pool:['福利社有新口味嗎？','下一節是什麼課？'],
-  setup(){schoolBase();standPlayer(7,8);playgroundKids();
+  setup(){schoolBase(true);standPlayer(7,8);playgroundKids();
    G.ents.push({id:'podium',name:'講台',kind:'none',tx:11,ty:3,label:'交作業'},{id:'toilet',name:'廁所',kind:'none',tx:5,ty:19,label:'上廁所'},{id:'seat',name:'座位',kind:'none',tx:8,ty:8,label:'坐回座位'});
    G.ghost.plan=[[11,3,'give'],[5,19,'toilet'],[8,8,'seat']]},
   async begin(){Sound.bell();const L=[{key:'give',text:'把作業交到講台'},{key:'toilet',text:'去上廁所'},{key:'back',text:'鐘響前回座位'}];G.gb.addNotes(L);G.brain.addNotes(L);after(6,()=>this.tease())},
@@ -1099,7 +1136,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  {id:'relay',map:'school',kind:'seat',t0:'13:30',t1:'14:20',real:60,dist:.5,title:'體育課：大隊接力',
   card:'練習大隊接力。聽到哨聲才能跑，搶跑要重來。',
   setup(){schoolBase();G.npcs=G.npcs.filter(n=>n.id==='teacher');G.npcs[0].x=tc(27);G.npcs[0].y=tf(9);playgroundKids();
-   G.player={x:tc(29),y:tf(10),dir:'right',sit:false,anim:0};G.ghost={x:tc(29),y:tf(10)-6,dir:'right',sit:false,anim:0,plan:[],path:null,wait:0};
+   G.player={x:tc(22),y:tf(10),dir:'right',sit:false,anim:0};G.ghost={x:tc(22),y:tf(10)-7,dir:'right',sit:false,anim:0,plan:[],path:null,wait:0};
    G.rl={phase:'intro',t:0,go:0,imp:0,dist:0,gdist:0,tries:0,runT:0}},
   isInteresting(){return G.rl&&G.rl.phase==='run'},
   isWorking(){return G.rl&&G.rl.phase!=='done'},
@@ -1107,8 +1144,8 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    if(r.phase==='ready')return `<div class="lbl">預備……聽到「嗶！」才能跑！一直按住「穩住」。</div><div class="row"><button class="big" data-hold="hold">🧍 穩住（按住）</button></div><div class="prog"><i id="pbar" style="background:var(--bad)"></i></div><div class="proglbl">身體想衝出去的程度</div>`;
    if(r.phase==='run')return `<div class="lbl">衝啊！一直點！</div><div class="row"><button class="big" data-act="run" style="min-width:200px;min-height:70px">🏃 跑！</button></div>`;
    return `<div class="lbl">${r.phase==='done'?'跑完了！':'準備中……'}</div><div class="row"><button data-hold="fidget">🌀 原地跳一跳</button></div>`},
-  async begin(){$('#lab').innerHTML='<div id="rlTxt" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#2f3b55;text-align:center;padding:10px"></div>';$('#lab').style.display='block';
-   await say('體育老師','大隊接力練習！聽到哨聲才可以跑，搶跑的重來！');this.ready()},
+  async begin(){$('#lab').className='banner';$('#lab').innerHTML='<div id="rlTxt" style="font-weight:800;color:#2f3b55;text-align:center"></div>';
+   await say('體育老師','大隊接力練習！聽到哨聲才可以跑，搶跑的重來！');$('#lab').style.display='block';this.ready()},
   ready(){const r=G.rl;r.phase='ready';r.t=0;r.imp=0;r.go=rand(1.6,3.6);input.hold=false;refreshBar()},
   startRun(){const r=G.rl;r.phase='run';r.runT=0;input.hold=false;refreshBar()},
   keyAct(){this.act('run')},
@@ -1122,8 +1159,10 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
        else{r.phase='wait';refreshBar();say('體育老師','嗶嗶嗶！搶跑！回來重來！').then(()=>this.ready())}}
      else if(r.t>=r.go){Sound.tone(1400,.4,'square',.12);this.startRun()}}
    if(r.phase==='run'){r.runT+=dt;r.gdist+=dt*6*2.2;
+     const lane=d=>tc(22)+clamp(d/180,0,1)*(tc(37)-tc(22));
+     G.player.x=lane(r.dist);G.player.moving=true;G.player.anim=(G.player.anim||0)+dt*12;G.ghost.x=lane(r.gdist);G.ghost.moving=true;G.ghost.anim=(G.ghost.anim||0)+dt*12;
      if(el)el.innerHTML=`🏃 你：${Math.round(r.dist)} 公尺`+(G.compare?`<br><span style="color:#2a9a9a;font-size:18px">一般的你：${Math.round(r.gdist)} 公尺</span>`:'');
-     if(r.runT>=8){r.phase='done';refreshBar();S().relay=Math.round(r.dist);GS().relay=Math.round(r.gdist);const win=r.dist>r.gdist;Sound.good();
+     if(r.runT>=8){r.phase='done';G.player.moving=false;G.ghost.moving=false;refreshBar();S().relay=Math.round(r.dist);GS().relay=Math.round(r.gdist);const win=r.dist>r.gdist;Sound.good();
        say('體育老師',win?'哇，{name}你跑超快！大隊接力你跑最後一棒！':'不錯喔！再加油！').then(()=>{if(win)b.mood=clamp(b.mood+10,0,100);G.fast=true})}}},
   finish(){$('#lab').style.display='none';if(G.rl.phase!=='done'){S().relay=Math.round(G.rl.dist)}},
   bot(){const r=G.rl;if(r.phase==='ready')input.hold=true;if(r.phase==='run'&&Math.random()<.4)this.act('run')},
@@ -1200,8 +1239,11 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
   setup(){hallBase();sitPlayer(8,10);G.prog=0;G.gprog=0},
   bar(){return `<div class="lbl">按住「抄筆記」。沒有人會管你——也沒有人會提醒你。</div><div class="row"><button class="big" data-hold="write">📝 抄筆記（按住）</button><button data-hold="fidget">🦶 抖腳</button></div><div class="prog"><i id="pbar"></i></div><div class="proglbl" id="plbl"></div>`},
   async begin(){if(S().late)await say('你（內心）','（遲到了，前面的重點都沒聽到。）');
-   after(20,async()=>{await say('教授','提醒一下：分組名單，今天下午兩點前寄給助教。期末報告下週一早上九點前上傳。');
-     const L=[{key:'email',text:'下午兩點前寄分組名單'},{key:'report',text:'下週一交期末報告'}];G.gb.addNotes(L);G.brain.addNotes(L)})},
+   after(20,async()=>{const writing=G.prog>=15;
+     await say('教授','提醒一下：分組名單，今天下午兩點前寄給助教。期末報告下週一早上九點前上傳。');
+     const L=[{key:'email',text:'下午兩點前寄分組名單'},{key:'report',text:'下週一交期末報告'}];G.gb.addNotes(L);G.brain.addNotes(L);
+     if(writing){if(addWritten(L))toast('📒 你有在抄筆記，教授說的寫進筆記本了')}
+     else toast('（筆記抄得太少，教授這段沒寫下來）')})},
   tick(dt){seatWork(dt,100/60);ghostWork(dt,100/60);if(S().late)G.prog=Math.min(G.prog,85)},
   onOverflow(){toast('你坐不住了，起身到走廊晃了五分鐘。');G.clock+=5;G.prog=Math.max(0,G.prog-8)},
   finish(){S().notes=Math.round(G.prog);GS().notes=Math.round(G.gprog)},
@@ -1521,6 +1563,7 @@ function startChapter(id,segIdx){
   const num=(v,d)=>Number.isFinite(+v)?+v:d;
   const go=()=>{G.brain=new Brain(sv,false,brainCtx());G.gb=new Brain(sv,true,brainCtx());G.brain.on=onBrain;G.gb.on=onGhostBrain;
     if(resume){G.brain.mood=num(sv.run.mood,70);G.brain.anx=num(sv.run.anx,15)}
+    hookWritten();
     showSegCard(segIdx)};
   if(!resume&&canUseSupports(id))supportScreen(go);else go();
 }
@@ -1537,9 +1580,10 @@ function showSegCard(i){
   $('#goSeg').onclick=()=>{Sound.init();hideScreen();beginSeg(i)};
 }
 function beginSeg(i){
-  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;
+  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;$('#lab').className='';$('#lab').style.display='none';
   G.map=getMap(seg.map);G.ents=[];G.npcs=[];
-  if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes()}
+  if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes();if(G.run)G.run.written=[]}
+  renderWritten();
   G.brain.thoughts=[];G.gb.thoughts=[];G.brain.daydream=0;G.brain.hyper=false;G.brain.rest=Math.min(G.brain.rest,30);
   // 換時段＝休息過：動力與專注部分回復（不完全回滿）
   for(const bb of [G.brain,G.gb]){const base=bb.typical?70:55;bb.dopa=Math.max(bb.dopa,lerp(bb.dopa,base,.8));bb.focus=Math.max(bb.focus,bb.typical?85:60)}
