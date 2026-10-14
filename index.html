@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.6';
+const VERSION='v0.6.7';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1713,7 +1713,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
    S().calm=ok;
    if(ok){await say('你','（深呼吸）……謝謝提醒，我馬上處理。');G.brain.mood=clamp(G.brain.mood-4,0,100)}
    else if(Math.random()<G.save.outward){await say('你','「我已經很努力了好嗎！你只看得到我做錯的！」（語氣很衝）');await scold('主管','……你這是什麼態度？')}
-   else{S().masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);G.brain.mood=clamp(G.brain.mood-12,0,100);await say('你','「好，我會改。」');await say('你（內心）','（你走進廁所，哭了十五分鐘，補好妝再回座位。沒有人知道。）')}
+   else{S().masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);G.brain.mood=clamp(G.brain.mood-12,0,100);await say('你','「好，我會改。」');await say('你（內心）','（你走進廁所，哭了十五分鐘，'+(G.save.gender==='F'?'補好妝':'洗了把臉')+'再回座位。沒有人知道。）')}
    endSeg()},
  },
  {id:'leave',map:'office',kind:'roam',t0:'18:30',t1:'18:45',real:55,dist:1.1,phone:true,phonePool:WORK_PHONE,phoneJump:3,title:'下班',
@@ -1778,7 +1778,8 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
   async onTrigger(e){if(e.id!=='door')return;const i=await say('你（內心）','帶小樂出門了嗎？',{choices:['出門！','再看看']});if(i===0)endSeg();else G.player.y-=T},
   onTimeUp(){S().late=true;return say('小樂','{parent}，我們要遲到了啦！').then(()=>endSeg())},
   finish(){const s=S();s.items=[G.run.bag.kwater,s.signed,s.bento,G.run.bag.badge].filter(Boolean).length;
-   const n=G.brain.notes.find(n=>n.key==='cake'&&!n.done);s.cakeNote=!!n;s.cakeLife=n?n.life:0},
+   const n=G.brain.notes.find(n=>n.key==='cake'&&!n.done);s.cakeNote=!!n;s.cakeLife=n?n.life:0;
+   s.cakeWritten=(G.run.written||[]).some(w=>w.key==='cake')},
   bot(){const s=S();if(!G.run.bag.kwater&&botGo('kwater'))return;if(!s.signed&&botGo('ksign'))return;if(!s.bento&&botGo('bento'))return;if(!G.run.bag.badge&&botGo('badge'))return;botGo('door')},
  },
  {id:'dinner',map:'apt',kind:'roam',t0:'18:00',t1:'19:00',real:100,dist:1.1,phone:true,phoneJump:10,title:'晚餐時間',
@@ -1790,7 +1791,10 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    G.soup={on:false,t:0,done:false,burnt:false};G.wash={t:0,ready:false,done:false};
    G.ghost.plan=[[20,3,'soupOn'],[4,4,'khw'],[21,10,'laundry'],[20,3,'soup']]},
   async begin(){const s=S();
-   const cake=G.brain.typical||(s.cakeNote&&(s.cakeLife>.45||sup('list')||sup('timer')));s.cake=!!cake;
+   let pc=s.cakeWritten?1:s.cakeNote?(s.cakeLife>.45?.85:.55):.2;
+   if(sup('med'))pc+=.15;if(sup('timer'))pc+=.25;
+   const cake=G.brain.typical||Math.random()<pc;s.cake=!!cake;
+   if(cake&&s.cakeWritten)toast('📒 下班前看了一眼清單：買蛋糕！');else if(cake&&!s.cakeNote)toast('💡 下班路上，突然想起來了——今天是紀念日！');
    if(cake){await say('旁白','你提著蛋糕進門。伴侶眼睛一亮：「你記得！」');G.brain.mood=clamp(G.brain.mood+10,0,100)}
    else await say('你（內心）','（今天好像……是什麼日子？算了，想不起來。）');
    await say('伴侶','我先去洗澡。你煮晚餐：先開火煮湯，大概十分鐘後要關火喔；洗衣機好了要晾；小樂的功課你看一下。');
@@ -1827,7 +1831,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    const ok=await qte({q:'你覺得被指責了。委屈、羞愧一下子湧上來……',btn:'😮‍💨 深呼吸（按住）',l1:'冷靜',l2:'情緒潰堤',need:2.2,rate:emoRate,hint:'心情越差，越難冷靜。'});
    s.calm=ok;
    if(!ok){if(Math.random()<G.save.outward){await say('你','「我每天上班也很累好嗎！你以為我故意的嗎？」');G.brain.mood=clamp(G.brain.mood-10,0,100)}
-     else{s.masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);await say('你（內心）','（你沒有回嘴。腦中一直重播：「我是個很糟的媽媽、很糟的伴侶。」）')}}
+     else{s.masked++;G.brain.anx=clamp(G.brain.anx+20,0,100);await say('你（內心）','（你沒有回嘴。腦中一直重播：「我是個很糟的{parent}、很糟的伴侶。」）')}}
    const dx=diagnosedBefore('family');
    const choices=dx?['跟伴侶說明 ADHD，一起想辦法','道歉，說下次會注意']:['道歉，說下次會注意','「我就是這樣，你又不是不知道」'];
    const i=await say('你','……',{choices});
