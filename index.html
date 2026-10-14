@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.4';
+const VERSION='v0.4.5';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1233,10 +1233,10 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  },
  {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
   card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
-  setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=base*(G.run.bag.notes?.5:1);
+  setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=G.run.bag.notes?base*.3:clamp(base+.12,0,.65);
    const mark=list=>list.map(q=>q.k&&Math.random()<unk);
    G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F),back:mark(EXAM_B)},cur:null};this.newQ();
-   const kq=[...EXAM_F,...EXAM_B].filter(q=>q.k).length;let gu=0;for(let i=0;i<kq;i++)if(Math.random()<base*.5&&Math.random()<2/3)gu++;GS().exam=Math.round((9-gu)/9*100)},
+   const kq=[...EXAM_F,...EXAM_B].filter(q=>q.k).length;let gu=0;for(let i=0;i<kq;i++)if(Math.random()<base*.3&&Math.random()<2/3)gu++;GS().exam=Math.round((9-gu)/9*100)},
   newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
   renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
    const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
