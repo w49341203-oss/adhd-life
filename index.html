@@ -233,7 +233,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3.6';
+const VERSION='v0.3.7';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -836,7 +836,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
    seatWork(dt,0);
  },
  act(a){if(a==='clean'){const L=G.lab;L.cleaned=true;L.on=false;G.brain.completeNote('clean');$('#lab').style.display='none';Sound.good();toast('收拾好了');G.fast=true;refreshBar()}},
- finish(){const L=G.lab;S().obs=L.score;S().cleaned=L.cleaned&&!L.warned;GS().obs=L.gscore;L.on=false;L.pts.forEach(p=>p.el.remove());$('#lab').style.display='none'},
+ finish(){const L=G.lab;S().obs=L.score;S().cleaned=L.cleaned&&!L.warned;S().cleanedLate=!!(L.cleaned&&L.warned);GS().obs=L.gscore;L.on=false;L.pts.forEach(p=>p.el.remove());$('#lab').style.display='none'},
 },
 /* 6. 午休 */
 {id:'nap',map:'school',kind:'seat',t0:'12:40',t1:'13:20',real:40,boring:true,dist:.8,restMul:1.4,title:'午休',
@@ -1573,7 +1573,7 @@ Object.assign(CH_ELEM,{stage:'kid',compScale:1,pools:POOL,
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時到校',yes(!s.late),yes(true)],['早自習抄聯絡簿',s.copy+'%',(g.copy||100)+'%'],
    ['數學課三步驟',s.math+' / 3','3 / 3'],['沒舉手就喊答案',s.blurts+' 次','0 次'],['下課準時回座',yes(!s.backLate),yes(true)],
-   ['⭐ 自然課觀察發現',s.obs+' 個',g.obs+' 個',true],['自然課有收拾',yes(s.cleaned),yes(true)],['午休被糾正',s.napScold+' 次','0 次'],
+   ['⭐ 自然課觀察發現',s.obs+' 個',g.obs+' 個',true],['自然課收拾器材',s.cleaned?'✅ 準時':s.cleanedLate?'🟡 被提醒才收':'❌',yes(true)],['午休被糾正',s.napScold+' 次','0 次'],
    ['放學帶回家的',s.bring+' / 3','3 / 3'],...commonRows(s,b,g)],
   cards:[s.obs>g.obs?`⭐ <b>你今天也有贏一般人的地方：</b>自然課你發現了 ${s.obs} 個特徵，一般的你只有 ${g.obs} 個。超專注是 ADHD 的優勢——只是它不太聽指揮。`:'',...SCIENCE]}}});
 const CHAPTER_DEFS={elem:CH_ELEM,mid:CH_MID,uni:CH_UNI,work:CH_WORK,family:CH_FAMILY};
