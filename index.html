@@ -223,7 +223,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.3';
+const VERSION='v0.3.1';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1643,12 +1643,11 @@ function titleScreen(){
   screen(`<div class="scr"><h1>我的ADHD人生</h1><div class="subt">換一顆大腦，過一次人生</div>
   <button class="mbtn pri" id="tNew">開始新的人生</button>
   <button class="mbtn" id="tLoad" ${any?'':'disabled'}>繼續（讀取存檔）</button>
-  <button class="mbtn" id="tImp">輸入存檔碼</button>
   <button class="mbtn" id="tAbout">關於 ADHD 與這個遊戲</button>
   <p style="text-align:center;font-size:12px;color:var(--sub);margin-top:30px">${VERSION}</p></div>`);
   $('#tNew').onclick=()=>{Sound.init();slotScreen('new')};
   $('#tLoad').onclick=()=>{Sound.init();slotScreen('load')};
-  $('#tImp').onclick=importScreen;$('#tAbout').onclick=aboutScreen;
+  $('#tAbout').onclick=aboutScreen;
 }
 function slotScreen(mode){
   const html=[1,2,3].map(i=>{const d=Save.load(i);
@@ -1697,32 +1696,15 @@ function lifeMap(){
   screen(`<div class="scr"><h2>${esc(sv.name)} 的人生地圖</h2><p>${sv.gender==='M'?'男':'女'}・IQ ${sv.iq}・ADHD 混合型・${dx}</p>
    <div class="life">${nodes}</div>
    ${sv.completed.includes('family')?'<button class="mbtn pri" id="recap">🌅 人生回顧</button>':''}
-   <button class="mbtn" id="exp">匯出存檔碼（備份用）</button><button class="mbtn" id="home">回主選單</button>
-   <p style="font-size:13px;color:var(--sub);text-align:center">💡 iPad / iPhone 的 Safari 如果太久沒開，可能會清掉存檔。建議每玩完一章就「匯出存檔碼」備份。</p></div>`);
+   <button class="mbtn" id="home">回主選單</button></div>`);
   document.querySelectorAll('.lnode.open').forEach(el=>el.onclick=()=>{
     const id=el.dataset.id;if(!chapterDef(id))return;
     const resume=sv.run&&sv.run.chapter===id?sv.seg:0;hideScreen();startChapter(id,resume);
   });
   if($('#recap'))$('#recap').onclick=lifeRecap;
-  $('#exp').onclick=exportScreen;$('#home').onclick=titleScreen;
-}
-function exportScreen(){
-  const code=Save.encode(G.save);
-  screen(`<div class="scr"><h2>匯出存檔碼</h2><p>把下面整段文字複製起來，貼到記事本或傳給自己（LINE 記事本也可以）。之後在主選單選「輸入存檔碼」就能接著玩。</p>
-  <textarea id="code" readonly>${esc(code)}</textarea><button class="mbtn pri" id="cp">複製</button><button class="mbtn" id="back">返回</button></div>`);
-  $('#cp').onclick=async()=>{try{await navigator.clipboard.writeText(code);toastScr('已複製！')}catch(e){$('#code').select();toastScr('請長按文字框手動複製')}};
-  $('#back').onclick=lifeMap;
+  $('#home').onclick=titleScreen;
 }
 function toastScr(t){const p=document.createElement('p');p.textContent=t;p.style.textAlign='center';p.style.color='var(--good)';$('#screen .scr').appendChild(p);setTimeout(()=>p.remove(),2000)}
-function importScreen(){
-  screen(`<div class="scr"><h2>輸入存檔碼</h2><textarea id="code" placeholder="貼上 ADHD1: 開頭的存檔碼"></textarea>
-  <div class="field"><label>要放到哪個存檔位置？</label><div class="seg2"><button data-s="1" class="on">1</button><button data-s="2">2</button><button data-s="3">3</button></div></div>
-  <button class="mbtn pri" id="go">讀取</button><button class="mbtn" id="back">返回</button><p id="err" class="warn"></p></div>`);
-  let slot=1;document.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{slot=+b.dataset.s;document.querySelectorAll('[data-s]').forEach(x=>x.className=x===b?'on':'')});
-  $('#go').onclick=()=>{const d=Save.decode($('#code').value);if(!d){$('#err').textContent='存檔碼不正確，請確認有完整複製（ADHD1: 開頭）。';return}
-    if(Save.load(slot)&&!confirm('存檔位置 '+slot+' 已有資料，要覆蓋嗎？'))return;G.slot=slot;G.save=d;Save.store(slot,d);lifeMap()};
-  $('#back').onclick=titleScreen;
-}
 function aboutScreen(){
   screen(`<div class="scr"><h2>關於 ADHD 與這個遊戲</h2>
   <p>ADHD（注意力不足過動症）是一種大腦發展上的差異，影響專注、衝動控制和自我管理。它不是懶惰、不是教養問題，也和聰不聰明無關。</p>
@@ -2009,6 +1991,7 @@ function renderMeters(el,b){
 let last=performance.now();
 function frame(now){const dt=Math.min(.1,(now-last)/1000);last=now;try{step(dt);render(now)}catch(e){console.error(e)}requestAnimationFrame(frame)}
 $('#ver').textContent=VERSION;
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 resize();titleScreen();requestAnimationFrame(frame);
 window.__adhd={G,step,input,Save,CH_ELEM,endSeg,beginSeg,startChapter};
 </script>
