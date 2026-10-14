@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.5.4';
+const VERSION='v0.5.6';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -965,16 +965,37 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 // ADHD 做事效率：就算有輔助，切換、重新開始、檢查還是比一般人多花力氣
 const ADHD_EFF=.88;
 const MED_RESP={
-  good:{name:'效果很好',mods:{drainMul:.45,focusPlus:12,restMul:.8},eff:1,wall:1.8,note:'這個角色對藥物反應很好：坐著做事幾乎能跟一般人一樣。'},
-  partial:{name:'部分有效',mods:{drainMul:.6,focusPlus:8,restMul:.85},eff:.88,wall:1.5,note:'這個角色對藥物部分有效：有明顯幫助，但還是比一般人吃力。'},
-  weak:{name:'效果不明顯',mods:{drainMul:.85,focusPlus:3,restMul:.95},eff:.88,wall:1.1,note:'這個角色對這種藥反應不明顯。現實中，醫師通常會調整劑量或換藥，也會搭配其他方法。'}};
+  good:{name:'效果很好',mods:{drainMul:.45,focusPlus:12,restMul:.8,decayMul:.6},eff:1,wall:1.8,note:'這個角色對藥物反應很好：坐著做事幾乎能跟一般人一樣。'},
+  partial:{name:'部分有效',mods:{drainMul:.6,focusPlus:8,restMul:.85,decayMul:.75},eff:.88,wall:1.5,note:'這個角色對藥物部分有效：有明顯幫助，但還是比一般人吃力。'},
+  weak:{name:'效果不明顯',mods:{drainMul:.85,focusPlus:3,restMul:.95,decayMul:.9},eff:.88,wall:1.1,note:'這個角色對這種藥反應不明顯。現實中，醫師通常會調整劑量或換藥，也會搭配其他方法。'}};
 function medResp(){const sv=G.save;if(!sv.flags.medResp){const r=Math.random();sv.flags.medResp=r<.5?'good':r<.83?'partial':'weak'}return MED_RESP[sv.flags.medResp]||MED_RESP.partial}
-function getUpEvent(){const b=G.brain;S().getups=(S().getups||0)+1;const min=Math.round(rand(5,12));G.clock+=min;
-  b.rest=15;b.energy=clamp(b.energy+5,0,100);b.daydream=2.6;
-  const where=G.map.name==='office'?['去茶水間倒杯水','起來去上個廁所','走去同事座位晃一下','站在窗邊滑了一下手機']:['起來倒杯水','去開冰箱看看','走到窗邊晃一下','去上個廁所','拿個東西，順便滑了一下手機'];
-  showDaydream('🚶 '+pick(where),'坐不住了，起來晃一下……回來要重新開始（'+min+' 分鐘）');
+const GETUP_SPOTS={
+  home:[[20,3,'開冰箱看看有什麼吃的'],[18,3,'去廚房倒杯水'],[11,2,'走到窗邊發呆'],[10,7,'倒在沙發上躺一下']],
+  dorm:[[12,7,'開小冰箱找飲料'],[10,2,'走到窗邊晃一下'],[7,8,'走到門口又走回來']],
+  office:[[24,3,'去茶水間倒杯咖啡'],[14,2,'站在窗邊伸展一下'],[8,12,'走去同事座位晃一下'],[23,6,'去茶水間找零食']]};
+function getUpEvent(){const b=G.brain,p=G.player;if(!p||p.trip)return;
+  S().getups=(S().getups||0)+1;
+  const spots=(GETUP_SPOTS[G.map.name]||[]).slice().sort(()=>Math.random()-.5);
+  const hx=Math.floor(p.x/T),hy=Math.floor((p.y-2)/T);let path=null,spot=null;
+  for(const sp of spots){path=bfs(G.map,hx,hy,sp[0],sp[1]);if(path&&path.length){spot=sp;break}}
   if(G.wall&&G.wall.started){G.wall.started=false;G.wall.prog=0;refreshBar()}
-  logSeen&&G.run&&(G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen:'又起來走來走去',brain:'坐不住已經滿了，身體一定要動一下'})}
+  (G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen:'又起來走來走去',brain:'坐不住已經滿了，身體一定要動一下'});
+  const min=Math.round(rand(5,12));
+  if(!spot){G.clock+=min;b.rest=15;toast('🚶 坐不住了，起來晃了一下（'+min+' 分鐘）');return}
+  p.trip={path,stage:'go',stay:rand(1.2,2),home:{x:p.x,y:p.y,tx:hx,ty:hy},min,label:spot[2]};
+  p.sit=false;b.daydream=999;toast('🚶 坐不住了……'+spot[2]);inner('先起來一下下就好……');
+}
+function tripStep(dt){const p=G.player,tr=p.trip,b=G.brain;
+  if(tr.path.length){const [nx,ny]=tr.path[0],tx=tc(nx),ty=tf(ny),dx=tx-p.x,dy=ty-p.y,d=Math.hypot(dx,dy),sp=90*dt;
+    if(d<=sp){p.x=tx;p.y=ty;tr.path.shift()}else{p.x+=dx/d*sp;p.y+=dy/d*sp}
+    p.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');p.moving=true;p.anim=(p.anim||0)+dt*8;b.rest=clamp(b.rest-12*dt,0,100);return}
+  p.moving=false;
+  if(tr.stage==='go'){tr.stay-=dt;p.dir='up';if(tr.stay<=0){tr.stage='back';tr.path=bfs(G.map,Math.floor(p.x/T),Math.floor((p.y-2)/T),tr.home.tx,tr.home.ty)||[]}return}
+  // 回到座位
+  p.x=tr.home.x;p.y=tr.home.y;p.sit=true;p.dir='up';p.trip=null;
+  b.daydream=0;b.rest=15;b.energy=clamp(b.energy+5,0,100);
+  toast('🪑 回到座位……又要重新開始了');
+}
 function seatWork(dt,rate){
   const b=G.brain;
   if(rate>0&&input.write&&b.daydream<=0){
@@ -1270,7 +1291,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   finish(){S().items=['notes','pe','bento','card'].filter(k=>G.run.bag[k]).length},
   bot(){for(const id of ['pe','notes','card','bento'])if(botGo(id))return;botGo('door')},
  },
- {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:100,boring:true,dist:1,title:'段考',
+ {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',pace:1.6,real:100,boring:true,dist:1,title:'段考',
   card:'段考：國文、英文、數學。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
   setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=G.run.bag.notes?base*.3:clamp(base+.12,0,.65);
    // 每題同一個隨機數：一般的你記不起來的字，ADHD 的你也一定記不起來（同一個人）
@@ -1284,7 +1305,9 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
    let body;
    if(E.submitted)body='<div style="font-size:20px;font-weight:800;text-align:center;padding:20px">交卷了。等鐘響……</div>';
    else if(E.i>=list.length)body=E.side==='front'
-     ?'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button><button data-act="flip" class="sm" style="opacity:.6">↻</button></div>'
+     ?((G.brain.hasNote('flip')||(G.run.written||[]).some(w=>w.key==='flip'&&!w.done))
+       ?'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！（對了，考卷有兩面）</div><div class="po"><button data-act="flip">↻ 翻到背面</button><button data-act="submit" class="sm">📄 交卷</button></div>'
+       :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button><button data-act="flip" class="sm" style="opacity:.6">↻</button></div>')
      :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">背面也寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button></div>';
    else{const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
      body='<div id="exq"></div>'
@@ -1807,7 +1830,7 @@ function beginSeg(i){
   G.sprog=0;G.swall=null;G.sprogUsed=false;G.segScold=0;
   G.brain.energy=clamp(G.brain.energy+40,0,100);
   $('#daydream').style.display='none';$('#hyperTag').style.display='none';$('#cloudMe').querySelectorAll('.bub').forEach(e=>e.remove());document.querySelectorAll('.bub.fly').forEach(e=>e.remove());G.flyEl=null;
-  seg.setup();
+  seg.setup();if(G.player)G.player.trip=null;
   if(seg.kind==='roam')addFreeActs();
   G.ents.forEach(e=>{e.px=tc(e.tx);e.py=e.onDesk?e.ty*T+6:tf(e.ty)-4});
   G.clock=hm(seg.t0);
@@ -2149,7 +2172,8 @@ function step(dt){
   else if(G.ddSub)$('#ddSub').textContent=G.ddSub+'（'+Math.ceil(G.brain.daydream)+'）';
   if(seg.returnAt&&!G.returning&&G.clock>=hm(seg.t0)+(hm(seg.t1)-hm(seg.t0))*seg.returnAt){G.returning=true;classmatesReturn();toast(G.brain.hyper?'（遠遠的……大家好像在往哪裡走？）':'同學們陸續走回教室了',G.brain.hyper)}
   if(G.distract){G.distract.t-=dt;if(G.distract.t<=0)G.distract=null}
-  if(seg.getUp&&seg.kind==='seat'&&!G.brain.typical&&G.brain.daydream<=0&&G.brain.rest>45&&!G.qte&&Math.random()<dt*.04)getUpEvent();
+  if(G.player&&G.player.trip&&seg.kind==='seat')tripStep(dt);
+  if(seg.getUp&&seg.kind==='seat'&&!G.brain.typical&&G.brain.daydream<=0&&!(G.player&&G.player.trip)&&G.brain.rest>45&&!G.qte&&Math.random()<dt*.04)getUpEvent();
   seg.tick&&seg.tick(dt);
 }
 function moveActor(a,dx,dy,dt,sp){
