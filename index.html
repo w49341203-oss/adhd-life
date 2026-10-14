@@ -245,7 +245,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.4.3';
+const VERSION='v0.4.4';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -1201,7 +1201,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  reflect:async()=>{await say('旁白','你每週去一次諮商，也跟導師說明了你的狀況。\n困難還在，但你不再覺得自己是「壞孩子」。')},
  report(s,g,b){return{rows:[
    ['早上帶齊的東西',s.items+' / 4','4 / 4'],['準時搭上公車',yes(!s.late),yes(true)],
-   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ 有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
+   ['英文段考',s.exam+' 分',g.exam+' 分'],['粗心看錯題目',s.careless+' 題','0 題'],['跳字／跳行而答錯',(s.skipErr||0)+' 題','0 題'],['重讀題目',(s.rereads||0)+' 次','—'],['單字沒記起來只能猜（跟 IQ、有沒有複習有關）',(s.unknown||0)+' 題','0 題'],['發現考卷背面',yes(s.flipped),yes(true)],
    ['被嘲笑時忍住了',s.held===null?'—':yes(s.held),yes(true)],['下課準時回座',yes(!s.backLate),yes(true)],
    ['⭐ 大隊接力跑出',s.relay+' 公尺',g.relay+' 公尺',true],['搶跑',s.falseStart+' 次','0 次'],
    ['作業完成',s.hw+'%',g.hw+'%'],['被手機吃掉的時間',s.phoneMin+' 分鐘','0 分鐘'],...commonRows(s,b,g)],
@@ -1221,7 +1221,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
     {id:'mom',name:'媽媽',kind:'none',tx:18,ty:5,talk:true,label:'問媽媽要帶什麼'},
     {id:'door',name:'大門',kind:'none',tx:11,ty:11,trigger:true}];
    G.ghost.plan=[[1,4,'pe'],[6,8,'notes'],[12,9,'card'],[17,7,'bento'],[11,10,null]]},
-  async begin(){await say('媽媽','{name}！今天有體育課，運動服帶了沒？還有英文講義、便當，悠遊卡別又忘了！公車七點二十！');
+  async begin(){await say('媽媽','{name}！今天有體育課，運動服帶了沒？還有英文講義、便當，悠遊卡別又忘了！講義帶著，公車上可以再複習一下單字。公車七點二十！');
    const L=[{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}];G.gb.addNotes(L);G.brain.addNotes(L)},
   async onTalk(e){if(e.id!=='mom')return;await say('媽媽','講義、運動服、便當、悠遊卡！我講第三次了！');G.brain.mood=clamp(G.brain.mood-3,0,100);
    G.brain.addNotes([{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}].filter(x=>!G.run.bag[x.key]))},
@@ -1233,10 +1233,10 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
  },
  {id:'exam',map:'school',kind:'seat',t0:'08:10',t1:'09:00',real:85,boring:true,dist:1,title:'英文段考',
   card:'段考第一節：英文。題目都不難——如果你看得清楚的話。',pool:['這題好像有看過…','窗外的鳥好吵','考完要去福利社'],
-  setup(){schoolBase();sitPlayer();const unk=clamp((115-G.save.iq)/60,0,.6);
+  setup(){schoolBase();sitPlayer();const base=clamp((108-G.save.iq)/60,0,.55),unk=base*(G.run.bag.notes?.5:1);
    const mark=list=>list.map(q=>q.k&&Math.random()<unk);
    G.ex={side:'front',i:0,front:[],back:[],submitted:false,unk:{front:mark(EXAM_F),back:mark(EXAM_B)},cur:null};this.newQ();
-   const kq=[...EXAM_F,...EXAM_B].filter(q=>q.k).length;let gu=0;for(let i=0;i<kq;i++)if(Math.random()<unk&&Math.random()<2/3)gu++;GS().exam=Math.round((9-gu)/9*100)},
+   const kq=[...EXAM_F,...EXAM_B].filter(q=>q.k).length;let gu=0;for(let i=0;i<kq;i++)if(Math.random()<base*.5&&Math.random()<2/3)gu++;GS().exam=Math.round((9-gu)/9*100)},
   newQ(careful){const E=G.ex,list=E.side==='front'?EXAM_F:EXAM_B;E.cur=E.i<list.length?buildQ(list[E.i],careful,(E.side==='front'?E.unk.front:E.unk.back)[E.i]):null},
   renderPaper(){const E=G.ex,el=$('#lab');if(!E||!el)return;const list=E.side==='front'?EXAM_F:EXAM_B;
    const head=`<div class="ph"><span>📄 英文段考　${E.side==='front'?'正面':'背面'}</span><span>${E.submitted?'已交卷':E.i<list.length?'第 '+(E.i+1)+' / '+list.length+' 題':''}</span></div>`;
@@ -1246,7 +1246,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
      ?'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">正面寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button><button data-act="flip" class="sm" style="opacity:.6">↻</button></div>'
      :'<div style="font-size:20px;font-weight:800;text-align:center;padding:10px">背面也寫完了！</div><div class="po"><button data-act="submit">📄 交卷</button></div>';
    else{const q=list[E.i],unk=(E.side==='front'?E.unk.front:E.unk.back)[E.i];
-     body='<div id="exq"></div>'+(unk?'<div class="unk">（這幾個單字沒記起來……看起來像亂碼，只能用猜的。不管有沒有 ADHD，沒記住就是看不懂。）</div>':'')
+     body='<div id="exq"></div>'
        +'<div class="po">'+q.o.map((o,k)=>'<button data-act="ans" data-v="'+k+'">'+esc(unk?garble(o,k*11+7):o)+'</button>').join('')+'<button data-act="reread" class="sm">🔁 再讀一次</button></div>'}
    el.innerHTML=head+body;bindHoldButtons(el);renderExq()},
   bar(){this.renderPaper();return `<div class="lbl">看畫面中間的考卷作答。題目讀過的字會淡掉、有時會跳字跳行。</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`},
