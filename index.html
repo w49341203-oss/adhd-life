@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.1';
+const VERSION='v0.6.2';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -674,7 +674,7 @@ function onBrain(type,d){
   if(type==='rest-overflow'){
     S().overflow++;
     if(Math.random()>G.save.outward){S().masked++;b.anx=clamp(b.anx+15,0,100);b.mood=clamp(b.mood-4,0,100);b.energy=clamp(b.energy-15,0,100);toast('你用盡力氣忍住了。沒有人發現……但好累。');if(G.run)(G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen:'看起來安靜、很乖',brain:'用盡力氣硬忍住想動的身體'});inner('不能動…不能被發現…')}
-    else if(G.seg.onOverflow){b.rest=30;G.seg.onOverflow()}
+    else if(G.seg.onOverflow){b.rest=30;if(G.seg.kind!=='seat'||G.seg.id==='nap'||!wanderInClass(()=>G.seg.onOverflow()))G.seg.onOverflow()}
     else{b.rest=40;toast('你忍不住大動作伸了個懶腰，旁邊的人看了你一眼。')}
   }
   if(type==='hyper'){$('#hyperTag').style.display=d?'block':'none';if(d)inner('哇……好好玩……')}
@@ -1008,11 +1008,22 @@ function getUpEvent(){const b=G.brain,p=G.player;if(!p||p.trip)return;
   p.trip={path,stage:'go',stay:rand(1.2,2),home:{x:p.x,y:p.y,tx:hx,ty:hy},min,label:spot[2]};
   p.sit=false;b.daydream=999;toast('🚶 坐不住了……'+spot[2]);inner('先起來一下下就好……');
 }
+const WANDER_SPOTS={
+  school:[[12,3,'走上去削鉛筆'],[2,2,'走到窗邊看外面'],[7,6,'跑去找同學講話'],[17,4,'起來去丟垃圾']],
+  hall:[[10,8,'起身到走道晃一下'],[20,4,'走到教室門口']],
+  office:[[2,4,'站起來到白板前晃一下'],[8,7,'走到會議室門口']]};
+function wanderInClass(onArrive){const b=G.brain,p=G.player;if(!p||p.trip)return false;
+  const hx=Math.floor(p.x/T),hy=Math.floor((p.y-2)/T);
+  for(const sp of (WANDER_SPOTS[G.map.name]||[]).slice().sort(()=>Math.random()-.5)){const path=bfs(G.map,hx,hy,sp[0],sp[1]);
+    if(path&&path.length){p.trip={path,stage:'go',stay:rand(1.4,2.2),home:{x:p.x,y:p.y,tx:hx,ty:hy},label:sp[2],onArrive};p.sit=false;b.daydream=999;
+      toast('🚶 身體坐不住了……'+sp[2]);(G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen:'上課站起來走來走去',brain:'坐不住已經滿了，身體自己就站起來了'});return true}}
+  return false}
 function tripStep(dt){const p=G.player,tr=p.trip,b=G.brain;
   if(tr.path.length){const [nx,ny]=tr.path[0],tx=tc(nx),ty=tf(ny),dx=tx-p.x,dy=ty-p.y,d=Math.hypot(dx,dy),sp=90*dt;
     if(d<=sp){p.x=tx;p.y=ty;tr.path.shift()}else{p.x+=dx/d*sp;p.y+=dy/d*sp}
     p.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');p.moving=true;p.anim=(p.anim||0)+dt*8;b.rest=clamp(b.rest-12*dt,0,100);return}
   p.moving=false;
+  if(tr.stage==='go'&&tr.onArrive){const f=tr.onArrive;tr.onArrive=null;f();return}
   if(tr.stage==='go'){tr.stay-=dt;p.dir='up';if(tr.stay<=0){tr.stage='back';tr.path=bfs(G.map,Math.floor(p.x/T),Math.floor((p.y-2)/T),tr.home.tx,tr.home.ty)||[]}return}
   // 回到座位
   p.x=tr.home.x;p.y=tr.home.y;p.sit=true;p.dir='up';p.trip=null;
@@ -1498,7 +1509,7 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
      if(writing){if(addWritten(L))toast('📒 你有在抄筆記，教授說的寫進筆記本了')}
      else toast('（筆記抄得太少，教授這段沒寫下來）')})},
   tick(dt){seatWork(dt,100/33);ghostWork(dt,100/33);if(S().late)G.prog=Math.min(G.prog,85)},
-  onOverflow(){toast('你坐不住了，起身到走廊晃了五分鐘。');G.clock+=5;G.prog=Math.max(0,G.prog-8)},
+  onOverflow(){G.prog=Math.max(0,G.prog-8);inner('（漏聽了一段……）')},
   finish(){S().notes=Math.round(G.prog);GS().notes=Math.round(G.gprog)},
   bot(){input.write=true;input.fidget=G.brain.rest>40},
  },
@@ -1612,7 +1623,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
      if(ok){G.brain.mood=clamp(G.brain.mood+6,0,100);await say('主管','{name}，你剛剛說的點子很好，這個可以試試看！')}
      else{S().interrupt=true;await say('你','「欸我想到了！我們可以——」');await scold('主管','……我還沒講完。等一下再說。')}})},
   tick(dt){seatWork(dt,100/29);ghostWork(dt,100/29)},
-  onOverflow(){toast('你忍不住起身去倒水，漏聽了一段。');G.prog=Math.max(0,G.prog-10)},
+  onOverflow(){G.prog=Math.max(0,G.prog-10);inner('（主管講到哪了？漏聽了一段……）')},
   finish(){S().listen=Math.round(G.prog);GS().listen=Math.round(G.gprog)},
   bot(){if(G.qte){input.hold=true;return}input.write=true;input.fidget=G.brain.rest>40},
  },
@@ -2291,7 +2302,8 @@ function render(t){
   for(const n of G.npcs){list.push({y:n.y,f:()=>drawChar(ctx,n.x,n.y,n.look,{dir:n.dir,sit:n.sit,moving:n.moving,frame:n.anim})})}
   if(G.compare&&G.ghost&&G.seg.kind!=='scene'){const g=G.ghost;list.push({y:g.y+.1,f:()=>{drawChar(ctx,g.x,g.y,meLook(),{dir:g.dir,sit:g.sit,moving:g.moving,frame:g.anim,alpha:.45});
     ctx.fillStyle='rgba(111,224,224,.95)';ctx.font='bold 5px sans-serif';ctx.textAlign='center';ctx.fillText('一般的你',g.x,g.y-20)}})}
-  list.push({y:p.y,f:()=>drawChar(ctx,p.x,p.y,meLook(),{dir:p.dir,sit:p.sit,moving:p.moving,frame:p.anim})});
+  const jig=p.sit&&G.brain&&!G.brain.typical&&(input.fidget||G.brain.rest>65)?((Math.floor(t/110)%2)?1:-1)*(G.brain.rest>85?1.5:.8):0;
+  list.push({y:p.y,f:()=>drawChar(ctx,p.x+jig,p.y,meLook(),{dir:p.dir,sit:p.sit,moving:p.moving,frame:p.anim})});
   list.sort((a,b)=>a.y-b.y).forEach(o=>o.f());
   // 聚光燈（注意力）
   if(G.brain&&G.seg&&G.seg.kind!=='scene'){
