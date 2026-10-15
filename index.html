@@ -142,6 +142,8 @@ button{font-family:inherit;cursor:pointer}
 .meter .v{width:26px;text-align:right;font-variant-numeric:tabular-nums}
 .inner{margin-top:6px;font-size:13px;color:#f3e3b8;min-height:20px;font-style:italic}
 .wl{background:#f4f7fb;border-radius:8px;padding:6px 8px;margin-bottom:6px}
+.jot{position:relative;overflow:hidden;width:100%;margin:2px 0 6px;padding:8px;border-radius:8px;border:2px solid #4a6cf7;background:#eef2ff;color:#2a3a8a;font-weight:700;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none}
+.jot i{position:absolute;left:0;top:0;bottom:0;background:rgba(74,108,247,.25);pointer-events:none}
 .wl .wt{font-size:12px;color:#5d6b8a;font-weight:700;margin-bottom:3px}
 .wl button{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px dashed #c9d1d8;color:#2b2d42;font-size:13px;font-weight:700;padding:6px 2px;min-height:34px}
 .wl button.done{color:#8a98ac;text-decoration:line-through}
@@ -247,6 +249,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
         <div class="cloud" id="cloudMe"><span class="cl">念頭泡泡（點一下丟掉）</span><div class="hyper" id="hyperMe">🔦 超專注中<br>其他念頭全部消失了……<br>連鐘聲都聽不太到</div></div>
         <div class="mlabel"><span>📝 便利貼（工作記憶）</span><span id="capMe"></span></div>
         <div class="notes" id="notesMe"></div>
+        <div id="jotMe"></div>
         <div id="writtenMe"></div>
         <div id="metersMe"></div>
         <div id="medMe" style="display:none;font-size:12px;color:#ffd66b;margin-top:4px;line-height:1.5"></div>
@@ -267,7 +270,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.9';
+const VERSION='v0.6.10';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -507,7 +510,8 @@ class Brain{
     const dropped=[];
     for(const it of list){
       if(this.notes.some(n=>n.key===it.key&&!n.done)){continue}
-      if(this.notes.filter(n=>!n.done).length<this.memCap)this.notes.push({id:this.nid++,key:it.key,text:it.text,life:1,cd:0,done:false});
+      const life0=it.told&&!this.typical?clamp(.5+this.focus/250,.5,.85):1;
+      if(this.notes.filter(n=>!n.done).length<this.memCap)this.notes.push({id:this.nid++,key:it.key,text:it.text,life:life0,cd:0,done:false,told:!!it.told});
       else dropped.push(it);
     }
     if(dropped.length)this.emit('overflow-notes',dropped);
@@ -555,7 +559,7 @@ class Brain{
     for(const n of this.notes){
       if(n.cd>0)n.cd-=dt;
       if(n.done){n.doneT-=dt;continue}
-      if(A)n.life-=this.base.decay*this.adhd.decay*(this.mods.decayMul||1)*(c.pace||1)*(this.focus<40?1.6:1)*(this.hyper?.3:1)*dt;
+      if(A)n.life-=this.base.decay*this.adhd.decay*(this.mods.decayMul||1)*(c.pace||1)*(this.focus<40?1.6:1)*(this.hyper?.3:1)*(n.told?TOLD_FADE:1)*dt;
       else n.life-=this.base.decay*(c.pace||1)*dt;
     }
     for(const n of this.notes.filter(n=>!n.done&&n.life<=0)){this.emit('note-lost',n)}
@@ -688,6 +692,21 @@ function onGhostBrain(type,d){const g=G.gb,gs=G.run&&G.run.gs;if(!g||!gs)return;
   if(type==='note-lost'||type==='overflow-notes')gs.lost=(gs.lost||0)+(Array.isArray(d)?d.length:1);
 }
 function dist(ax,ay,bx,by){return Math.hypot(ax-bx,ay-by)}
+const TOLD_FADE=3.2;   // 口頭交代的事，ADHD 淡掉的速度是一般便利貼的幾倍
+const tell=L=>L.map(x=>Object.assign({},x,{told:true}));
+// ✍️ 抄下來：別人口頭交代時，可以按住把它寫進清單（花一點時間，可能漏聽別的）
+function offerJot(L){if(!G.run||G.brain.typical)return;const W=G.run.written||[];const todo=L.filter(x=>!W.some(w=>w.key===x.key));if(!todo.length)return;
+  G.jot={list:todo,t:9,hold:0};renderJot()}
+function renderJot(){const el=$('#jotMe');if(!el)return;const j=G.jot;
+  if(!j){el.innerHTML='';return}
+  el.innerHTML='<button id="jotBtn" class="jot">✍️ 抄下來（按住）<i style="width:'+Math.round(j.hold/JOT_NEED*100)+'%"></i></button>';
+  const b=$('#jotBtn');b.addEventListener('pointerdown',e=>{e.preventDefault();if(G.jot)G.jot.holding=true});
+  ['pointerup','pointerleave','pointercancel'].forEach(t=>b.addEventListener(t,()=>{if(G.jot)G.jot.holding=false}))}
+const JOT_NEED=1.6;
+function jotStep(dt){const j=G.jot;if(!j)return;
+  if(j.holding){j.hold+=dt;G.brain.focus=clamp(G.brain.focus-4*dt,0,100);const i=$('#jotBtn i');if(i)i.style.width=Math.round(j.hold/JOT_NEED*100)+'%';
+    if(j.hold>=JOT_NEED){addWritten(j.list);S().jotted=(S().jotted||0)+1;Sound.good();toast('✍️ 抄下來了！忘了就點清單看一眼');G.jot=null;renderJot()}return}
+  j.t-=dt;if(j.t<=0){G.jot=null;renderJot()}}
 function degrade(text,life){
   if(life>=.6)return text;const k=(.6-life)/.6;let out='';
   for(let i=0;i<text.length;i++){const ch=text[i];let h=((i*97+ch.charCodeAt(0)*31)%100)/100;if(/[0-9]/.test(ch))h*=.4;out+=(h<k&&!/[（）()\s]/.test(ch))?'？':ch}
@@ -773,7 +792,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
  async begin(){
    await say('媽媽','{name}！起床了！今天要帶：聯絡簿、數學作業、水壺、餐袋。七點半要出門喔！');
    const list=[{key:'book',text:'帶聯絡簿'},{key:'hw',text:'帶數學作業'},{key:'water',text:'帶水壺'},{key:'lunch',text:'帶餐袋'}];
-   G.gb.addNotes(list);G.brain.addNotes(list);
+   G.gb.addNotes(list);G.brain.addNotes(tell(list));offerJot(list);
    if(!G.save.flags.tutorialDone){
      await say('說明','右邊（手機在下方）是你的「大腦即時畫面」。媽媽說了 4 件事，但你的便利貼（工作記憶）只有 '+G.brain.memCap+' 格——多的會直接掉下去。');
      await say('說明','腦袋會一直冒出「念頭泡泡」。點一下泡泡就能把它丟掉；來不及丟，你就會被它拉走。');
@@ -794,7 +813,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
      await say('媽媽','我剛剛不是才講過嗎？聯絡簿、數學作業、水壺、餐袋！');
      G.brain.mood=clamp(G.brain.mood-2,0,100);
      const list=[{key:'book',text:'帶聯絡簿'},{key:'hw',text:'帶數學作業'},{key:'water',text:'帶水壺'},{key:'lunch',text:'帶餐袋'}].filter(x=>!G.run.bag[x.key]);
-     G.brain.addNotes(list);
+     G.brain.addNotes(tell(list));offerJot(list);
    }
  },
  finish(){S().items=['book','hw','water','lunch'].filter(k=>G.run.bag[k]).length},
@@ -817,9 +836,10 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
 /* 3. 數學課 */
 {id:'math',map:'school',kind:'seat',t0:'08:40',t1:'09:20',pace:1.33,real:60,boring:true,dist:1,title:'數學課',
  card:'老師會交代要做的事。記住它。',pool:['32頁…還是23頁？','7×8…7×8…','課本的圖好像可以畫鬍子','數字長得好像小動物'],
- setup(){schoolBase();sitPlayer();G.prog=0;G.gprog=0;G.mstep=0;G.mans={}},
+ setup(){schoolBase();sitPlayer();G.prog=0;G.gprog=0;G.mstep=-1;G.mans={}},
  bar(){
    const st=G.mstep;
+   if(st===-1)return `<div class="lbl">👂 老師在黑板上講解例題……</div><div class="row"><button data-hold="fidget">🌀 轉筆</button></div>`;
    if(st===0)return `<div class="lbl">📖 老師說要翻到第幾頁？（看看你的便利貼）</div><div class="row">${[23,32,35].map(n=>`<button data-act="page" data-v="${n}">第 ${n} 頁</button>`).join('')}<button data-hold="fidget">🌀 轉筆</button></div>`;
    if(st===1)return `<div class="lbl">✏️ 要寫第幾題？</div><div class="row">${[3,5,8].map(n=>`<button data-act="q" data-v="${n}">第 ${n} 題</button>`).join('')}<button data-hold="fidget">🌀 轉筆</button></div>`;
    if(st===2)return `<div class="lbl">按住「寫題目」把題目寫完</div><div class="row"><button class="big" data-hold="write">✏️ 寫題目（按住）</button><button data-hold="fidget">🌀 轉筆</button></div><div class="prog"><i id="pbar"></i></div><div class="proglbl" id="plbl"></div>`;
@@ -829,8 +849,8 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
  async begin(){
    await say('老師','翻到課本第 32 頁，寫第 5 題，寫完拿到講台給我。');
    const L=[{key:'p32',text:'翻到第32頁'},{key:'q5',text:'寫第5題'},{key:'give',text:'寫完拿到講台'}];
-   G.gb.addNotes(L);G.brain.addNotes(L);
-   after(12,()=>mathQTE());
+   G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L);
+   after(8,async()=>{await mathQTE();await new Promise(r=>after(5,r));if(!G.running||!G.seg||G.seg.id!=='math')return;await say('老師','好，例題講完了。大家開始寫吧！');G.mstep=0;refreshBar()});
    after(30,()=>{Sound.thud();toast('碰！隔壁同學的鉛筆盒掉到地上');G.brain.focus=clamp(G.brain.focus-25,0,100);G.gb.focus-=5;G.distract={x:tc(6),y:tf(8),t:1.5}});
  },
  act(a,v){
@@ -868,7 +888,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
  async begin(){
    Sound.bell();await say('老師','下課！十分鐘後回來上課。');
    const L=[{key:'toilet',text:'去上廁所'},{key:'water2',text:G.run.bag.water?'去裝水':'去喝水（沒帶水壺）'},{key:'back',text:'鐘響前回座位'}];
-   G.gb.addNotes(L);G.brain.addNotes(L);
+   G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L);
  },
  async onTalk(e){
    if(e.id==='toilet'&&!S().toilet){S().toilet=true;G.brain.completeNote('toilet');toast('🚻 上完廁所了');Sound.good()}
@@ -896,7 +916,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
    L.gacc+=dt;if(L.gacc>=1.6&&!L.gDone){L.gacc=0;L.gscore++}
    if(frac>=.7&&!L.called){L.called=true;L.gDone=true;
      if(b.hyper){Sound.bell(.02);toast('（遠遠的……好像有人在說話？）',true);toast('（「…大家…收拾…」）',true)}
-     else{say('老師','好，時間到！大家收拾放大鏡和葉子，準備下課。');G.brain.addNotes([{key:'clean',text:'收拾器材'}])}
+     else{say('老師','好，時間到！大家收拾放大鏡和葉子，準備下課。');G.brain.addNotes(tell([{key:'clean',text:'收拾器材'}]))}
      refreshBar();
    }
    if(frac>=.88&&L.called&&!L.cleaned&&!L.warned){L.warned=true;G.brain.hyper=false;onBrain('hyper',false);
@@ -939,7 +959,7 @@ const CH_ELEM={id:'elem',name:'第一章　國小',age:'9 歲',segs:[
    Sound.bell();
    await say('老師','明天美勞課要帶美勞用具！通知單發下去了，回家給家長簽名；數學作業本記得帶回家寫。');
    const L=[{key:'art',text:'明天要帶美勞用具（跟媽媽說）'},{key:'notice',text:'帶通知單回家'},{key:'hw2',text:'數學作業本帶回家'}];
-   G.gb.addNotes(L);G.brain.addNotes(L);
+   G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L);
    await say('老師','怕大家忘記，老師都寫在黑板上了，抄進聯絡簿再走！');
    addWritten(L);G.run.flags.boardList=true;toast('📒 老師換了一種交代方式：寫下來了！忘了就點右邊的清單');
  },
@@ -1355,9 +1375,9 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
     {id:'door',name:'大門',kind:'none',tx:11,ty:11,trigger:true}];
    G.ghost.plan=[[1,4,'pe'],[6,8,'notes'],[12,9,'card'],[17,7,'bento'],[11,10,null]]},
   async begin(){await say('媽媽','{name}！今天有體育課，運動服帶了沒？還有英文講義、便當，悠遊卡別又忘了！講義帶著，公車上可以再複習一下單字。公車七點二十！');
-   const L=[{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}];G.gb.addNotes(L);G.brain.addNotes(L)},
+   const L=[{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L)},
   async onTalk(e){if(e.id!=='mom')return;await say('媽媽','講義、運動服、便當、悠遊卡！我講第三次了！');G.brain.mood=clamp(G.brain.mood-3,0,100);
-   G.brain.addNotes([{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}].filter(x=>!G.run.bag[x.key]))},
+   {const L=[{key:'notes',text:'帶英文講義'},{key:'pe',text:'帶運動服'},{key:'bento',text:'帶便當'},{key:'card',text:'帶悠遊卡'}].filter(x=>!G.run.bag[x.key]);G.brain.addNotes(tell(L));offerJot(L)}},
   async onTrigger(e){if(e.id!=='door')return;const have=['notes','pe','bento','card'].filter(k=>G.run.bag[k]).length;
    const i=await say('你（內心）','出門了嗎？（書包裡有 '+have+' 樣）',{choices:['出門！','再找找']});if(i===0)endSeg();else G.player.y-=T},
   onTimeUp(){S().late=true;return say('媽媽','公車走了啦！我載你去，快點！（一路上被念到學校）').then(()=>endSeg())},
@@ -1390,7 +1410,7 @@ const CH_MID={id:'mid',name:'第二章　中學',age:'14 歲',stage:'teen',compS
   async begin(){if(S().late){toast('（遲到了，比別人少寫五分鐘）');G.clock+=5}
    await say('監考老師','段考開始。今天考國文、英文、數學，考卷有正反兩面，寫完要檢查。');
    $('#lab').className='paper';$('#lab').style.display='block';this.renderPaper();
-   const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(L)},
+   const L=[{key:'flip',text:'考卷有正反兩面'},{key:'check',text:'寫完要檢查'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L)},
   act(a,v){const E=G.ex,b=G.brain;if(b.daydream>0){toast('（腦袋飄走了，看不清題目）');return}
    if(a==='reread'&&E.cur){S().rereads=(S().rereads||0)+1;this.newQ(true);this.renderPaper();return}
    if(a==='ans'&&!E.submitted){const list=E.side==='front'?EXAM_F:EXAM_B;if(E.i>=list.length)return;const q=list[E.i],C=E.cur;
@@ -1544,7 +1564,7 @@ const CH_UNI={id:'uni',name:'第三章　大學',age:'20 歲',stage:'adult',comp
   async begin(){if(S().late)await say('你（內心）','（遲到了，前面的重點都沒聽到。）');
    after(14,async()=>{const writing=G.prog>=15;
      await say('教授','提醒一下：分組名單，今天下午兩點前寄給助教。期末報告下週一早上九點前上傳。');
-     const L=[{key:'email',text:'下午兩點前寄分組名單'},{key:'report',text:'下週一交期末報告'}];G.gb.addNotes(L);G.brain.addNotes(L);
+     const L=[{key:'email',text:'下午兩點前寄分組名單'},{key:'report',text:'下週一交期末報告'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L);
      if(writing){if(addWritten(L))toast('📒 你有在抄筆記，教授說的寫進筆記本了')}
      else toast('（筆記抄得太少，教授這段沒寫下來）')})},
   tick(dt){seatWork(dt,100/33);ghostWork(dt,100/33);if(S().late)G.prog=Math.min(G.prog,85)},
@@ -1656,7 +1676,7 @@ const CH_WORK={id:'work',name:'第四章　工作',age:'28 歲',stage:'adult',co
   bar(){return `<div class="lbl">按住「專心聽」。腳抖一抖可以降低坐不住。</div><div class="row"><button class="big" data-hold="write">👂 專心聽（按住）</button><button data-hold="fidget">🦶 抖腳</button></div><div class="prog"><i id="pbar"></i></div><div class="proglbl" id="plbl"></div>`},
   async begin(){
    after(8,async()=>{await say('主管','今天四件事：下午三點前回客戶 email；更新報價單；訂下週三的會議室；還有，專案簡報交給 {name}，你最有創意。');
-     const L=[{key:'email',text:'三點前回客戶 email'},{key:'quote',text:'更新報價單'},{key:'room',text:'訂下週三會議室'},{key:'slides',text:'做專案簡報'}];G.gb.addNotes(L);G.brain.addNotes(L)});
+     const L=[{key:'email',text:'三點前回客戶 email'},{key:'quote',text:'更新報價單'},{key:'room',text:'訂下週三會議室'},{key:'slides',text:'做專案簡報'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L)});
    after(24,async()=>{const ok=await qte({q:'主管還在講，你突然想到一個超棒的點子！好想馬上說出來——',btn:'🤐 等主管講完（按住）',need:1.7+G.save.outward*.8,hint:'「坐不住」越高，越難等。'});
      S().idea=true;
      if(ok){G.brain.mood=clamp(G.brain.mood+6,0,100);await say('主管','{name}，你剛剛說的點子很好，這個可以試試看！')}
@@ -1770,7 +1790,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    G.ents.forEach(e=>{if(e.lure)e.lure=e.lure.replace('{parent}',G.save.gender==='F'?'媽媽':'爸爸')});
    G.ghost.plan=[[19,3,'kwater'],[15,4,'ksign'],[20,3,'bento'],[12,10,'badge'],[12,12,null]]},
   async begin(){await say('伴侶','早安～今天你送小樂：水壺、聯絡簿要簽名、便當要煮好！還有……今天是我們的結婚紀念日，晚上記得買蛋糕喔！');
-   const L=[{key:'kwater',text:'小樂的水壺'},{key:'ksign',text:'聯絡簿簽名'},{key:'bento',text:'煮便當'},{key:'cake',text:'下班買蛋糕（紀念日）'}];G.gb.addNotes(L);G.brain.addNotes(L);
+   const L=[{key:'kwater',text:'小樂的水壺'},{key:'ksign',text:'聯絡簿簽名'},{key:'bento',text:'煮便當'},{key:'cake',text:'下班買蛋糕（紀念日）'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L);
    G.brain.addNotes([{key:'badge',text:'帶自己的識別證'}])},
   async onTalk(e){
    if(e.id==='ksign'&&!S().signed){S().signed=true;G.brain.completeNote('ksign');Sound.good();toast('✍️ 聯絡簿簽好了')}
@@ -1798,7 +1818,7 @@ const CH_FAMILY={id:'family',name:'第五章　婚姻生活',age:'35 歲',stage:
    if(cake){await say('旁白','你提著蛋糕進門。伴侶眼睛一亮：「你記得！」');G.brain.mood=clamp(G.brain.mood+10,0,100)}
    else await say('你（內心）','（今天好像……是什麼日子？算了，想不起來。）');
    await say('伴侶','我先去洗澡。你煮晚餐：先開火煮湯，大概十分鐘後要關火喔；洗衣機好了要晾；小樂的功課你看一下。');
-   const L=[{key:'soup',text:'煮湯（十分鐘後關火）'},{key:'laundry',text:'洗衣機好了要晾'},{key:'khw',text:'看小樂的功課'}];G.gb.addNotes(L);G.brain.addNotes(L)},
+   const L=[{key:'soup',text:'煮湯（十分鐘後關火）'},{key:'laundry',text:'洗衣機好了要晾'},{key:'khw',text:'看小樂的功課'}];G.gb.addNotes(L);G.brain.addNotes(tell(L));offerJot(L)},
   async onTalk(e){const s=S(),sp=G.soup;
    if(e.id==='stove'){
      if(sp.burnt||sp.done){toast('（爐子已經關了）');return}
@@ -1912,7 +1932,7 @@ function showSegCard(i){
   $('#goSeg').onclick=()=>{Sound.init();hideScreen();beginSeg(i)};
 }
 function beginSeg(i){
-  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.clockFrozen=false;G.autoFidget=0;G.tapT=0;G.tiltT=0;G.getUpPending=false;$('#lab').className='';$('#lab').style.display='none';
+  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.clockFrozen=false;G.jot=null;if(typeof renderJot==='function')renderJot();G.autoFidget=0;G.tapT=0;G.tiltT=0;G.getUpPending=false;$('#lab').className='';$('#lab').style.display='none';
   G.map=getMap(seg.map);G.ents=[];G.npcs=[];
   if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes();if(G.run)G.run.written=[]}
   renderWritten();
@@ -2219,6 +2239,7 @@ function step(dt){
   for(const t of G.timers){t.t-=dt;if(t.t<=0&&!t.done){t.done=true;t.fn()}}
   G.timers=G.timers.filter(t=>!t.done);
   if(G.dlg)return;
+  jotStep(dt);
   if(G.peek>0)G.peek-=dt;
   if(G.innerT>0){G.innerT-=dt;if(G.innerT<=0)$('#innerMe').textContent=''}
   // 時間
