@@ -267,7 +267,7 @@ textarea{width:100%;min-height:90px;font-size:13px;background:#111614;color:var(
 
 <script>
 'use strict';
-const VERSION='v0.6.8';
+const VERSION='v0.6.9';
 const COPYRIGHT='© 2026 蕭妤真　版權所有';
 const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1031,7 +1031,7 @@ function actOf(t){for(const [re,a] of ACTS)if(re.test(t.text))return a;return nu
 function canAct(){const b=G.brain;return (b.rest>35&&b.dopa>40)||b.rest>60}
 function logAct(seen,t){(G.run.log||(G.run.log=[])).length<40&&G.run.log.push({t:fmtTime(G.clock),seen,brain:'「'+t+'」的念頭來不及丟掉，身體就先動了'})}
 function randomSpot(r){const p=G.player,m=G.map,cx=Math.floor(p.x/T),cy=Math.floor((p.y-2)/T);
-  for(let k=0;k<30;k++){const x=cx+Math.round(rand(-r,r)),y=cy+Math.round(rand(-r,r));if(!solidAt(m,x,y)&&Math.abs(x-cx)+Math.abs(y-cy)>=3)return[x,y]}return null}
+  for(let k=0;k<30;k++){const x=cx+Math.round(rand(-r,r)),y=cy+Math.round(rand(-r,r));if(!solidAt(m,x,y)&&Math.abs(x-cx)+Math.abs(y-cy)>=3&&bfs(m,cx,cy,x,y))return[x,y]}return null}
 function doAct(a,t){const b=G.brain,p=G.player,seat=G.seg.kind==='seat';
   if(seat){
     if(a==='run'||a==='slide'||a==='snack'){
@@ -1912,7 +1912,7 @@ function showSegCard(i){
   $('#goSeg').onclick=()=>{Sound.init();hideScreen();beginSeg(i)};
 }
 function beginSeg(i){
-  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.autoFidget=0;G.tapT=0;G.tiltT=0;G.getUpPending=false;$('#lab').className='';$('#lab').style.display='none';
+  const seg=G.chapter.segs[i];G.seg=seg;G.segT=0;G.timers=[];G.fast=false;G.seated=false;G.qte=null;G.distract=null;G.peek=0;G.alarmed=false;G.clockMul=1;G.returning=false;G.clockFrozen=false;G.autoFidget=0;G.tapT=0;G.tiltT=0;G.getUpPending=false;$('#lab').className='';$('#lab').style.display='none';
   G.map=getMap(seg.map);G.ents=[];G.npcs=[];
   if(!seg.keepNotes){G.brain.clearNotes();G.gb.clearNotes();if(G.run)G.run.written=[]}
   renderWritten();
@@ -2242,7 +2242,13 @@ function step(dt){
     const p=G.player;
     if(p.auto){
       const a=p.auto;
-      if(a.t>0&&dist(p.x,p.y,a.x,a.y)>10){const ox=p.x,oy=p.y;moveActor(p,a.x-p.x,a.y-p.y,dt,a.sp||62);walking=true;a.t-=dt;if(Math.hypot(p.x-ox,p.y-oy)<.2){a.stuck+=dt;if(a.stuck>.5)a.t=0}}
+      // 目標會動（貓咪、獨角仙、小樂）：跑遠了就重新找路追過去
+      if(a.t>0&&a.ent&&a.path!==undefined&&(a.re=(a.re||0)-dt)<=0&&dist(a.ent.px,a.ent.py+6,a.x,a.y)>20){a.re=.5;a.x=a.ent.px;a.y=a.ent.py+6;a.path=undefined}
+      if(a.t>0&&a.path===undefined){a.path=autoPath(p,a.x,a.y);if(a.path)a.t=Math.max(a.t,a.path.length*T/(a.sp||62)*1.5+2)}
+      if(a.t>0&&a.path&&a.path.length){const [nx,ny]=a.path[0],tx=tc(nx),ty=tf(ny),dx=tx-p.x,dy=ty-p.y,d=Math.hypot(dx,dy),sp=(a.sp||62)*dt;
+        if(d<=sp){p.x=tx;p.y=ty;a.path.shift()}else{p.x+=dx/d*sp;p.y+=dy/d*sp}
+        p.dir=Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up');p.moving=true;p.anim=(p.anim||0)+dt*8;walking=true;a.t-=dt}
+      else if(a.t>0&&!a.path&&dist(p.x,p.y,a.x,a.y)>10){const ox=p.x,oy=p.y;moveActor(p,a.x-p.x,a.y-p.y,dt,a.sp||62);walking=true;a.t-=dt;if(Math.hypot(p.x-ox,p.y-oy)<.2){a.stuck+=dt;if(a.stuck>.5)a.t=0}}
       else{a.t=0;a.stay-=dt;p.moving=false;if(a.stay<=0)p.auto=null}
     }else{
       const dx=input.right-input.left,dy=input.down-input.up;
@@ -2285,6 +2291,15 @@ function step(dt){
   if(seg.getUp&&seg.kind==='seat'&&!G.brain.typical&&G.brain.daydream<=0&&!(G.player&&G.player.trip)&&!G.getUpPending&&G.brain.rest>45&&!G.qte&&Math.random()<dt*.04)getUpSoon();
   seg.tick&&seg.tick(dt);
 }
+// 找一條走到 (x,y) 附近的路：目標若在家具上，就走到旁邊最近、走得到的格子
+function autoPath(p,x,y){const m=G.map,sx=Math.floor(p.x/T),sy=Math.floor((p.y-2)/T),gx=Math.floor(x/T),gy=Math.floor((y-2)/T);
+  if(sx===gx&&sy===gy)return [];
+  let best=null;
+  for(let r=0;r<=3&&!best;r++)for(let yy=gy-r;yy<=gy+r;yy++)for(let xx=gx-r;xx<=gx+r;xx++){
+    if(Math.max(Math.abs(xx-gx),Math.abs(yy-gy))!==r)continue;
+    if(xx===sx&&yy===sy){if(!best||best.length>0)best=[];continue}
+    const pa=bfs(m,sx,sy,xx,yy);if(pa&&(!best||pa.length<best.length))best=pa}
+  return best}
 function moveActor(a,dx,dy,dt,sp){
   const l=Math.hypot(dx,dy);if(!l){a.moving=false;return}dx/=l;dy/=l;
   const nx=a.x+dx*sp*dt,ny=a.y+dy*sp*dt;
